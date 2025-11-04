@@ -1,1 +1,1 @@
-DB_NAME = examEval
+export const DB_NAME = "examEval"
