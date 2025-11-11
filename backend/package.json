@@ -1,6 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
+  "type": "module",
   "description": "this is the backend for OpenNow - a connecting bridge and fixing the communication gap between the shops and customer.",
   "main": "index.js",
   "scripts": {
