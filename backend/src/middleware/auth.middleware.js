@@ -10,6 +10,7 @@ import { User } from "../models/user.model.js";
 export const verifyJWT = asyncHandler(async (req, res, next) => {
     try {
         // Extract token from cookies or Authorization header
+        // ✅ Note: Express header() is case-insensitive
         const token = req.cookies?.accessToken || 
                      req.header("Authorization")?.replace("Bearer ", "");
         
