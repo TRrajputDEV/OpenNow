@@ -1,4 +1,5 @@
 // routes/user.routes.js
+//user routes 
 import { Router } from 'express';
 import {
     getCurrentUser,
