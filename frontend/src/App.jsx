@@ -5,7 +5,8 @@ function App() {
 
   return (
     <>
-      <h1>This is the OpenNow - check if your shop is open. </h1>
+       <h1>Exam Evaluation Application</h1>
+       <h3>EEA</h3> 
     </>
   )
 }
