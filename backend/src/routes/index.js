@@ -5,6 +5,7 @@ import userRoutes from './user.routes.js';
 import adminRoutes from './admin.routes.js';
 import questionRoutes from './question.routes.js';
 import examRoutes from './exam.routes.js';
+import examAttemptRoutes from './examAttempt.routes.js';
 
 const router = Router();
 
@@ -21,5 +22,6 @@ router.use('/users', userRoutes);
 router.use('/admin', adminRoutes);
 router.use('/questions', questionRoutes);
 router.use('/exams', examRoutes);
+router.use('/attempts', examAttemptRoutes);
 
 export default router;
