@@ -1,11 +1,12 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from '@/context/AuthContext';
+import { Toaster } from '@/components/ui/toaster';
 import LandingPage from '@/components/landing/LandingPage';
+import LoginPage from '@/components/auth/LoginPage';
+import RegisterPage from '@/components/auth/RegisterPage';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
 // Placeholder components (we'll build these next)
-const LoginPage = () => <div className="flex items-center justify-center min-h-screen text-2xl">Login Page (Coming Soon)</div>;
-const RegisterPage = () => <div className="flex items-center justify-center min-h-screen text-2xl">Register Page (Coming Soon)</div>;
 const StudentDashboard = () => <div className="flex items-center justify-center min-h-screen text-2xl">Student Dashboard (Coming Soon)</div>;
 const TeacherDashboard = () => <div className="flex items-center justify-center min-h-screen text-2xl">Teacher Dashboard (Coming Soon)</div>;
 const AdminDashboard = () => <div className="flex items-center justify-center min-h-screen text-2xl">Admin Dashboard (Coming Soon)</div>;
@@ -52,9 +53,10 @@ function App() {
             }
           />
 
-          {/* Catch all - redirect to home */}
+          {/* Catch all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <Toaster />
       </Router>
     </AuthProvider>
   );
