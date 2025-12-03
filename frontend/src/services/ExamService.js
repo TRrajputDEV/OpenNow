@@ -3,37 +3,51 @@ import apiClient from './ApiService';
 const ExamService = {
   // Get all exams by teacher
   getAllExams: async () => {
-    return await apiClient.get('/exams/my-exams');
+    const response = await apiClient.get('/exams');
+    // Backend returns: { success, data: { exams, pagination }, message }
+    return { data: response.data?.exams || response.data || [] };
   },
 
   // Get exam by ID
   getExamById: async (id) => {
-    return await apiClient.get(`/exams/${id}`);
+    const response = await apiClient.get(`/exams/${id}`);
+    return { data: response.data || response };
   },
 
   // Create new exam
   createExam: async (examData) => {
-    return await apiClient.post('/exams', examData);
+    const response = await apiClient.post('/exams', examData);
+    return { data: response.data || response };
   },
 
   // Update exam
   updateExam: async (id, examData) => {
-    return await apiClient.patch(`/exams/${id}`, examData);
+    const response = await apiClient.put(`/exams/${id}`, examData);
+    return { data: response.data || response };
   },
 
   // Delete exam
   deleteExam: async (id) => {
-    return await apiClient.delete(`/exams/${id}`);
+    const response = await apiClient.delete(`/exams/${id}`);
+    return { data: response.data || response };
   },
 
   // Publish exam
   publishExam: async (id) => {
-    return await apiClient.patch(`/exams/${id}/publish`);
+    const response = await apiClient.patch(`/exams/${id}/publish`);
+    return { data: response.data || response };
+  },
+
+  // Unpublish exam
+  unpublishExam: async (id) => {
+    const response = await apiClient.patch(`/exams/${id}/unpublish`);
+    return { data: response.data || response };
   },
 
   // Get exam attempts
   getExamAttempts: async (examId) => {
-    return await apiClient.get(`/exams/${examId}/attempts`);
+    const response = await apiClient.get(`/exams/${examId}/attempts`);
+    return { data: response.data || response };
   },
 };
 

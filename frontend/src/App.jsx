@@ -12,6 +12,8 @@ import RegisterPage from "@/components/auth/RegisterPage";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import TeacherDashboard from "@/components/teacher/TeacherDashboard";
+import { CreateExam } from "@/components/teacher/exams";
+
 import {
   QuestionsList,
   CreateQuestion,
@@ -71,6 +73,8 @@ function App() {
             <Route path="questions/create" element={<CreateQuestion />} />
             <Route path="questions/edit/:id" element={<EditQuestion />} />
             <Route path="exams" element={<ExamsList />} />
+            <Route path="exams" element={<ExamsList />} />
+            <Route path="exams/create" element={<CreateExam />} />
             {/* We'll add more routes here */}
           </Route>
 
