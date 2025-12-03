@@ -8,7 +8,7 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  withCredentials: true, // Important for cookies
+  withCredentials: true,
 });
 
 // Request interceptor (add token to headers)
@@ -28,7 +28,8 @@ apiClient.interceptors.request.use(
 // Response interceptor (handle errors globally)
 apiClient.interceptors.response.use(
   (response) => {
-    return response.data; // Return only data
+    // ✅ Return full response.data (which contains success, data, message)
+    return response.data;
   },
   (error) => {
     const message = error.response?.data?.message || 'Something went wrong';

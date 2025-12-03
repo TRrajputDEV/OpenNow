@@ -1,16 +1,42 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from '@/context/AuthContext';
-import { Toaster } from '@/components/ui/toaster';
-import LandingPage from '@/components/landing/LandingPage';
-import LoginPage from '@/components/auth/LoginPage';
-import RegisterPage from '@/components/auth/RegisterPage';
-import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { AuthProvider } from "@/context/AuthContext";
+import { Toaster } from "@/components/ui/toaster";
+import LandingPage from "@/components/landing/LandingPage";
+import LoginPage from "@/components/auth/LoginPage";
+import RegisterPage from "@/components/auth/RegisterPage";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import TeacherLayout from "@/components/teacher/TeacherLayout";
+import TeacherDashboard from "@/components/teacher/TeacherDashboard";
+import { CreateExam } from "@/components/teacher/exams";
 
-// Placeholder components (we'll build these next)
-const StudentDashboard = () => <div className="flex items-center justify-center min-h-screen text-2xl">Student Dashboard (Coming Soon)</div>;
-const TeacherDashboard = () => <div className="flex items-center justify-center min-h-screen text-2xl">Teacher Dashboard (Coming Soon)</div>;
-const AdminDashboard = () => <div className="flex items-center justify-center min-h-screen text-2xl">Admin Dashboard (Coming Soon)</div>;
-const Unauthorized = () => <div className="flex items-center justify-center min-h-screen text-2xl text-red-500">Unauthorized Access</div>;
+import {
+  QuestionsList,
+  CreateQuestion,
+  EditQuestion,
+} from "@/components/teacher/questions";
+import { ExamsList } from "@/components/teacher/exams";
+
+// Placeholder components
+const StudentDashboard = () => (
+  <div className="flex items-center justify-center min-h-screen text-2xl">
+    Student Dashboard (Coming Soon)
+  </div>
+);
+const AdminDashboard = () => (
+  <div className="flex items-center justify-center min-h-screen text-2xl">
+    Admin Dashboard (Coming Soon)
+  </div>
+);
+const Unauthorized = () => (
+  <div className="flex items-center justify-center min-h-screen text-2xl text-red-500">
+    Unauthorized Access
+  </div>
+);
 
 function App() {
   return (
@@ -27,7 +53,7 @@ function App() {
           <Route
             path="/student/*"
             element={
-              <ProtectedRoute allowedRoles={['student']}>
+              <ProtectedRoute allowedRoles={["student"]}>
                 <StudentDashboard />
               </ProtectedRoute>
             }
@@ -35,19 +61,28 @@ function App() {
 
           {/* Protected Routes - Teacher */}
           <Route
-            path="/teacher/*"
+            path="/teacher"
             element={
-              <ProtectedRoute allowedRoles={['teacher']}>
-                <TeacherDashboard />
+              <ProtectedRoute allowedRoles={["teacher"]}>
+                <TeacherLayout />
               </ProtectedRoute>
             }
-          />
+          >
+            <Route index element={<TeacherDashboard />} />
+            <Route path="questions" element={<QuestionsList />} />
+            <Route path="questions/create" element={<CreateQuestion />} />
+            <Route path="questions/edit/:id" element={<EditQuestion />} />
+            <Route path="exams" element={<ExamsList />} />
+            <Route path="exams" element={<ExamsList />} />
+            <Route path="exams/create" element={<CreateExam />} />
+            {/* We'll add more routes here */}
+          </Route>
 
           {/* Protected Routes - Admin */}
           <Route
             path="/admin/*"
             element={
-              <ProtectedRoute allowedRoles={['admin']}>
+              <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminDashboard />
               </ProtectedRoute>
             }
