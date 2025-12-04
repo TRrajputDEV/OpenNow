@@ -14,6 +14,12 @@ import TeacherLayout from "@/components/teacher/TeacherLayout";
 import TeacherDashboard from "@/components/teacher/TeacherDashboard";
 import { CreateExam, ExamDetails } from "@/components/teacher/exams";
 
+// stufent imports:
+import StudentLayout from "@/components/student/StudentLayout";
+import StudentDashboard from "@/components/student/StudentDashboard";
+import { AvailableExams, TakeExam } from "@/components/student/exams";
+import { Results, ResultDetail } from '@/components/student/results';
+
 import {
   QuestionsList,
   CreateQuestion,
@@ -22,11 +28,7 @@ import {
 import { ExamsList } from "@/components/teacher/exams";
 
 // Placeholder components
-const StudentDashboard = () => (
-  <div className="flex items-center justify-center min-h-screen text-2xl">
-    Student Dashboard (Coming Soon)
-  </div>
-);
+
 const AdminDashboard = () => (
   <div className="flex items-center justify-center min-h-screen text-2xl">
     Admin Dashboard (Coming Soon)
@@ -51,13 +53,20 @@ function App() {
 
           {/* Protected Routes - Student */}
           <Route
-            path="/student/*"
+            path="/student"
             element={
               <ProtectedRoute allowedRoles={["student"]}>
-                <StudentDashboard />
+                <StudentLayout />
               </ProtectedRoute>
             }
-          />
+          >
+            <Route index element={<StudentDashboard />} />
+            <Route path="exams" element={<AvailableExams />} />
+            <Route path="exams/:id/start" element={<TakeExam />} />
+            <Route path="results" element={<Results />} />
+            <Route path="results/:id" element={<ResultDetail />} />
+            {/* More routes coming: results, history, profile */}
+          </Route>
 
           {/* Protected Routes - Teacher */}
           <Route
