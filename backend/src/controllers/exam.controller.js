@@ -1,11 +1,10 @@
-// controllers/exam.controller.js
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { Exam } from '../models/exam.model.js';
 import { Question } from '../models/question.model.js';
 
-// ==================== CREATE EXAM ====================
+
 
 /**
  * @desc    Create new exam
@@ -20,7 +19,7 @@ export const createExam = asyncHandler(async (req, res) => {
         instructions,
         duration,
         passingMarks,
-        questions, // Array of { questionId, marks, order }
+        questions,
         startTime,
         endTime,
         settings,
@@ -29,7 +28,7 @@ export const createExam = asyncHandler(async (req, res) => {
         category
     } = req.body;
 
-    // Validation
+   
     if (!title || !subject || !duration || !startTime || !endTime) {
         throw new ApiError(400, "Title, subject, duration, start time, and end time are required");
     }
@@ -38,7 +37,7 @@ export const createExam = asyncHandler(async (req, res) => {
         throw new ApiError(400, "At least one question is required");
     }
 
-    // Verify all questions exist and are active
+  
     const questionIds = questions.map(q => q.questionId || q.question);
     const existingQuestions = await Question.find({
         _id: { $in: questionIds },
@@ -49,14 +48,14 @@ export const createExam = asyncHandler(async (req, res) => {
         throw new ApiError(400, "One or more questions are invalid or inactive");
     }
 
-    // Format questions array
+   
     const formattedQuestions = questions.map((q, index) => ({
         question: q.questionId || q.question,
         marks: q.marks || 1,
         order: q.order || index + 1
     }));
 
-    // Create exam
+ 
     const exam = await Exam.create({
         title,
         description,
@@ -83,7 +82,7 @@ export const createExam = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== GET EXAMS ====================
+
 
 /**
  * @desc    Get all exams (Teacher sees own, Student sees available)
@@ -97,11 +96,11 @@ export const getExams = asyncHandler(async (req, res) => {
 
     const query = { isActive: true };
 
-    // Role-based filtering
+   
     if (req.user.role === 'teacher') {
         query.createdBy = req.user._id;
     } else if (req.user.role === 'student') {
-        // Students only see published exams they can attempt
+       
         query.isPublished = true;
         query.$or = [
             { allowedStudents: 'all' },
@@ -109,7 +108,6 @@ export const getExams = asyncHandler(async (req, res) => {
         ];
     }
 
-    // Filters
     if (req.query.subject) {
         query.subject = req.query.subject;
     }
@@ -178,12 +176,10 @@ export const getExam = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Exam not found");
     }
 
-    // Teachers can view their own exams
     if (req.user.role === 'teacher' && exam.createdBy._id.toString() !== req.user._id.toString()) {
         throw new ApiError(403, "Not authorized to view this exam");
     }
 
-    // Students can only view published exams they're allowed to take
     if (req.user.role === 'student') {
         if (!exam.isPublished || !exam.canStudentAttempt(req.user._id)) {
             throw new ApiError(403, "You are not allowed to view this exam");
@@ -195,7 +191,6 @@ export const getExam = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== UPDATE EXAM ====================
 
 /**
  * @desc    Update exam
@@ -209,17 +204,14 @@ export const updateExam = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Exam not found");
     }
 
-    // Teachers can only update their own exams
     if (req.user.role === 'teacher' && exam.createdBy.toString() !== req.user._id.toString()) {
         throw new ApiError(403, "Not authorized to update this exam");
     }
 
-    // Don't allow updating published exams that have started
     if (exam.isPublished && new Date() >= exam.startTime) {
         throw new ApiError(400, "Cannot update exam that has already started");
     }
 
-    // If updating questions, verify they exist
     if (req.body.questions) {
         const questionIds = req.body.questions.map(q => q.questionId || q.question);
         const existingQuestions = await Question.find({
@@ -238,7 +230,6 @@ export const updateExam = asyncHandler(async (req, res) => {
         }));
     }
 
-    // Update allowed fields
     const allowedFields = [
         'title', 'description', 'subject', 'instructions', 'duration', 
         'passingMarks', 'questions', 'startTime', 'endTime', 'settings',
@@ -265,7 +256,6 @@ export const updateExam = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== PUBLISH/UNPUBLISH EXAM ====================
 
 /**
  * @desc    Publish exam
@@ -311,7 +301,6 @@ export const unpublishExam = asyncHandler(async (req, res) => {
         throw new ApiError(403, "Not authorized to unpublish this exam");
     }
 
-    // Don't allow unpublishing if exam has started
     if (new Date() >= exam.startTime) {
         throw new ApiError(400, "Cannot unpublish exam that has already started");
     }
@@ -324,7 +313,6 @@ export const unpublishExam = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== DELETE EXAM ====================
 
 /**
  * @desc    Delete exam (soft delete)
@@ -342,7 +330,6 @@ export const deleteExam = asyncHandler(async (req, res) => {
         throw new ApiError(403, "Not authorized to delete this exam");
     }
 
-    // Don't allow deleting if exam has started
     if (exam.isPublished && new Date() >= exam.startTime) {
         throw new ApiError(400, "Cannot delete exam that has already started");
     }
@@ -355,7 +342,6 @@ export const deleteExam = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== EXAM STATISTICS ====================
 
 /**
  * @desc    Get exam statistics
