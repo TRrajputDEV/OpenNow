@@ -1,4 +1,3 @@
-// controllers/examAttempt.controller.js
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
@@ -6,7 +5,6 @@ import { ExamAttempt } from '../models/examAttempt.model.js';
 import { Exam } from '../models/exam.model.js';
 import { Question } from '../models/question.model.js';
 
-// ==================== START EXAM ====================
 
 /**
  * @desc    Start exam attempt
@@ -17,14 +15,12 @@ export const startExam = asyncHandler(async (req, res) => {
     const { examId } = req.params;
     const studentId = req.user._id;
 
-    // Get exam with populated questions
     const exam = await Exam.findById(examId).populate('questions.question');
 
     if (!exam) {
         throw new ApiError(404, "Exam not found");
     }
 
-    // Validation checks
     if (!exam.isPublished) {
         throw new ApiError(400, "Exam is not published yet");
     }
@@ -37,12 +33,10 @@ export const startExam = asyncHandler(async (req, res) => {
         throw new ApiError(403, "You are not allowed to attempt this exam");
     }
 
-    // Check if student already attempted
     const existingAttempt = await ExamAttempt.findOne({ exam: examId, student: studentId });
     
     if (existingAttempt) {
         if (existingAttempt.status === 'in-progress') {
-            // Return existing in-progress attempt
             return res.status(200).json(
                 new ApiResponse(200, existingAttempt, "Exam attempt resumed")
             );
@@ -51,7 +45,6 @@ export const startExam = asyncHandler(async (req, res) => {
         }
     }
 
-    // Create new attempt
     const attempt = await ExamAttempt.create({
         exam: examId,
         student: studentId,
@@ -67,7 +60,6 @@ export const startExam = asyncHandler(async (req, res) => {
         }
     });
 
-    // Return exam questions (without correct answers)
     const examData = {
         attemptId: attempt._id,
         examTitle: exam.title,
@@ -95,7 +87,6 @@ export const startExam = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== SAVE ANSWER ====================
 
 /**
  * @desc    Save/update answer during exam
@@ -116,17 +107,14 @@ export const saveAnswer = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Attempt not found");
     }
 
-    // Verify ownership
     if (attempt.student.toString() !== req.user._id.toString()) {
         throw new ApiError(403, "Not authorized");
     }
 
-    // Check if attempt is still valid
     if (!attempt.isValid(attempt.exam.endTime)) {
         throw new ApiError(400, "Exam time has expired");
     }
 
-    // Update answer
     const answerIndex = attempt.answers.findIndex(
         ans => ans.question.toString() === questionId
     );
@@ -143,7 +131,6 @@ export const saveAnswer = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== SUBMIT EXAM ====================
 
 /**
  * @desc    Submit exam and calculate results
@@ -159,7 +146,6 @@ export const submitExam = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Attempt not found");
     }
 
-    // Verify ownership
     if (attempt.student.toString() !== req.user._id.toString()) {
         throw new ApiError(403, "Not authorized");
     }
@@ -168,10 +154,8 @@ export const submitExam = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Exam already submitted");
     }
 
-    // Auto-submit if time expired
     attempt.autoSubmitIfExpired(attempt.exam.endTime);
 
-    // Get all questions for grading
     const questionIds = attempt.answers.map(ans => ans.question);
     const questions = await Question.find({ _id: { $in: questionIds } });
 
@@ -180,7 +164,6 @@ export const submitExam = asyncHandler(async (req, res) => {
         questionMap[q._id.toString()] = q;
     });
 
-    // Grade each answer
     const partialMarkingEnabled = attempt.exam.settings.partialMarking;
 
     attempt.answers.forEach(answer => {
@@ -188,7 +171,6 @@ export const submitExam = asyncHandler(async (req, res) => {
         
         if (!question) return;
 
-        // Check if answer is correct
         if (answer.selectedAnswer === null || answer.selectedAnswer === undefined) {
             answer.isCorrect = false;
             answer.marksAwarded = 0;
@@ -206,13 +188,11 @@ export const submitExam = asyncHandler(async (req, res) => {
         }
     });
 
-    // Calculate passing status
     attempt.passed = attempt.score >= attempt.exam.passingMarks;
     attempt.status = attempt.status === 'in-progress' ? 'submitted' : attempt.status;
 
     await attempt.save();
 
-    // Prepare result response
     const result = {
         attemptId: attempt._id,
         examTitle: attempt.exam.title,
@@ -226,7 +206,6 @@ export const submitExam = asyncHandler(async (req, res) => {
         submitTime: attempt.submitTime
     };
 
-    // Include detailed answers if exam settings allow review
     if (attempt.exam.settings.allowReview) {
         result.answers = await Promise.all(
             attempt.answers.map(async (ans) => {
@@ -252,7 +231,6 @@ export const submitExam = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== GET ATTEMPT RESULT ====================
 
 /**
  * @desc    Get attempt result
@@ -271,7 +249,6 @@ export const getAttemptResult = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Attempt not found");
     }
 
-    // Authorization check
     const isStudent = req.user._id.toString() === attempt.student._id.toString();
     const isTeacher = req.user.role === 'teacher' && attempt.exam.createdBy.toString() === req.user._id.toString();
     const isAdmin = req.user.role === 'admin';
@@ -298,7 +275,6 @@ export const getAttemptResult = asyncHandler(async (req, res) => {
         submitTime: attempt.submitTime
     };
 
-    // Include detailed review if allowed
     if (attempt.exam.settings.allowReview || isTeacher || isAdmin) {
         result.answers = attempt.answers.map(ans => ({
             questionId: ans.question._id,
@@ -319,7 +295,6 @@ export const getAttemptResult = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== GET STUDENT ATTEMPTS ====================
 
 /**
  * @desc    Get all attempts by student
@@ -334,9 +309,7 @@ export const getMyAttempts = asyncHandler(async (req, res) => {
         })
         .populate('exam', 'title subject totalMarks')
         .sort({ createdAt: -1 })
-        .lean(); // Add lean() for better performance
-
-        // Return empty array if no attempts
+        .lean(); 
         if (!attempts) {
             return res.status(200).json(
                 new ApiResponse(200, [], "No attempts found")
@@ -351,7 +324,6 @@ export const getMyAttempts = asyncHandler(async (req, res) => {
         throw new ApiError(500, `Error fetching attempts: ${error.message}`);
     }
 });
-// ==================== GET EXAM ATTEMPTS (TEACHER) ====================
 
 /**
  * @desc    Get all attempts for an exam (Teacher)
@@ -367,7 +339,7 @@ export const getExamAttempts = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Exam not found");
     }
 
-    // Teachers can only view attempts for their exams
+    
     if (req.user.role === 'teacher' && exam.createdBy.toString() !== req.user._id.toString()) {
         throw new ApiError(403, "Not authorized");
     }
