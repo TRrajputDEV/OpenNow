@@ -11,6 +11,7 @@ import {
     getExamStats
 } from '../controllers/exam.controller.js';
 import { verifyJWT, authorize } from '../middleware/auth.middleware.js';
+import { getExamAttempts } from '../controllers/examAttempt.controller.js'; // ← CHANGED THIS
 
 const router = Router();
 
@@ -33,5 +34,8 @@ router.route('/:id')
 // Publish/Unpublish
 router.patch('/:id/publish', authorize('teacher', 'admin'), publishExam);
 router.patch('/:id/unpublish', authorize('teacher', 'admin'), unpublishExam);
+
+// Teacher view all attempts for their exam
+router.get('/:examId/attempts', authorize('teacher', 'admin'), getExamAttempts);
 
 export default router;

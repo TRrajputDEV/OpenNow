@@ -1,6 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -9,7 +8,6 @@ import {
   Flag,
   ChevronLeft,
   ChevronRight,
-  CheckCircle2,
   AlertCircle,
   Send,
   List,
@@ -28,11 +26,13 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const TakeExam = () => {
-  const { id } = useParams();
+  const { id: rawId } = useParams(); // examId from route
+  const examId = (rawId || "").trim();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [exam, setExam] = useState(null);
+  const [examData, setExamData] = useState(null); // { examTitle, duration, totalMarks, questions }
+  const [attemptId, setAttemptId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -40,11 +40,11 @@ const TakeExam = () => {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [showQuestionPalette, setShowQuestionPalette] = useState(false);
 
   useEffect(() => {
-    fetchExam();
-  }, [id]);
+    console.log("🎯 TakeExam: Initializing exam with ID:", examId);
+    initExam();
+  }, [examId]);
 
   // Timer
   useEffect(() => {
@@ -53,6 +53,7 @@ const TakeExam = () => {
     const timer = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) {
+          console.log("⏰ TakeExam: Time up! Auto-submitting...");
           handleAutoSubmit();
           return 0;
         }
@@ -63,10 +64,10 @@ const TakeExam = () => {
     return () => clearInterval(timer);
   }, [timeRemaining]);
 
-  // Warning before leaving page
+  // Warn before leaving page
   useEffect(() => {
     const handleBeforeUnload = (e) => {
-      if (exam && !submitting) {
+      if (examData && !submitting) {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -74,50 +75,77 @@ const TakeExam = () => {
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [exam, submitting]);
+  }, [examData, submitting]);
 
-  const fetchExam = async () => {
+  const initExam = async () => {
     try {
       setLoading(true);
-      const response = await ExamService.getExamById(id);
-      const examData = response.data;
+      console.log("📡 TakeExam: Fetching exam + starting attempt...");
 
-      // Check if exam can be attempted
-      const now = new Date();
-      if (now < new Date(examData.startTime)) {
-        toast({
-          variant: "destructive",
-          title: "Exam Not Started",
-          description: "This exam has not started yet",
-        });
-        navigate("/student/exams");
-        return;
+      // 1) Fetch exam (with questions)
+      const examResp = await ExamService.getExamById(examId);
+      console.log("✅ TakeExam: Raw examResp:", examResp);
+
+      const exam =
+        examResp.data?.exam || examResp.data || examResp.exam || examResp; // handle different wrappers
+      console.log("✅ TakeExam: Parsed exam:", exam);
+
+      if (!exam || !Array.isArray(exam.questions)) {
+        console.error("❌ TakeExam: Invalid exam object:", exam);
+        throw new Error("Invalid exam data received");
       }
 
-      if (now > new Date(examData.endTime)) {
-        toast({
-          variant: "destructive",
-          title: "Exam Ended",
-          description: "This exam has already ended",
-        });
-        navigate("/student/exams");
-        return;
-      }
+      // 2) Start/resume attempt
+      const attemptData = await ExamService.startExamAttempt(examId);
+      console.log("✅ TakeExam: Attempt started/resumed:", attemptData);
 
-      setExam(examData);
-      setTimeRemaining(examData.duration * 60); // Convert to seconds
+      setAttemptId(attemptData._id || attemptData.id);
 
-      // Initialize answers
+      // 3) Build examData for UI
+      const normalizedQuestions = exam.questions.map((q) => {
+        // exam.questions likely has shape: { question, marks, order }
+        const base = q.question || q;
+        return {
+          _id: base._id,
+          type: base.type,
+          questionText: base.questionText,
+          options: base.options || [],
+          marks: q.marks || base.marks || 1,
+        };
+      });
+
+      const uiExamData = {
+        examTitle: exam.title,
+        duration: exam.duration,
+        totalMarks: exam.totalMarks,
+        questions: normalizedQuestions,
+      };
+
+      console.log("✅ TakeExam: UI examData:", uiExamData);
+      setExamData(uiExamData);
+      setTimeRemaining((exam.duration || 0) * 60);
+
+      // 4) Initialize answers map
       const initialAnswers = {};
-      examData.questions.forEach((q) => {
-        initialAnswers[q.question._id] = null;
+      normalizedQuestions.forEach((q) => {
+        initialAnswers[q._id] = null;
       });
       setAnswers(initialAnswers);
+
+      toast({
+        title: "Exam Started",
+        description: `You have ${exam.duration} minutes to complete this exam`,
+      });
     } catch (error) {
+      console.error("❌ TakeExam: Error initializing exam:", error);
+      console.error("❌ TakeExam: Error response:", error.response?.data);
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message || "Failed to fetch exam",
+        description:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to start exam",
       });
       navigate("/student/exams");
     } finally {
@@ -125,33 +153,55 @@ const TakeExam = () => {
     }
   };
 
-  const handleAnswer = (questionId, answer) => {
+  const handleAnswer = async (questionId, answer) => {
+    console.log(
+      "💾 TakeExam: Saving answer for question:",
+      questionId,
+      "Answer:",
+      answer
+    );
+
     setAnswers((prev) => ({
       ...prev,
       [questionId]: answer,
     }));
+
+    try {
+      await ExamService.saveAnswer(attemptId, {
+        questionId,
+        answer,
+      });
+      console.log("✅ TakeExam: Answer saved to backend");
+    } catch (error) {
+      console.error("⚠️ TakeExam: Failed to save answer to backend:", error);
+      // Silent fail; local state is still fine
+    }
   };
 
   const toggleFlag = () => {
-    const questionId = exam.questions[currentQuestionIndex].question._id;
+    const questionId = examData.questions[currentQuestionIndex]._id;
+    console.log("🚩 TakeExam: Toggling flag for question:", questionId);
+
     setFlaggedQuestions((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(questionId)) {
-        newSet.delete(questionId);
+      const s = new Set(prev);
+      if (s.has(questionId)) {
+        s.delete(questionId);
+        console.log("➖ TakeExam: Question unflagged");
       } else {
-        newSet.add(questionId);
+        s.add(questionId);
+        console.log("➕ TakeExam: Question flagged");
       }
-      return newSet;
+      return s;
     });
   };
 
   const goToQuestion = (index) => {
+    console.log("📍 TakeExam: Navigating to question index:", index);
     setCurrentQuestionIndex(index);
-    setShowQuestionPalette(false);
   };
 
   const goToNextQuestion = () => {
-    if (currentQuestionIndex < exam.questions.length - 1) {
+    if (currentQuestionIndex < examData.questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     }
   };
@@ -163,6 +213,7 @@ const TakeExam = () => {
   };
 
   const handleAutoSubmit = () => {
+    console.log("⏰ TakeExam: Auto-submitting exam due to timeout");
     toast({
       title: "Time Up!",
       description: "Your exam has been automatically submitted",
@@ -176,48 +227,50 @@ const TakeExam = () => {
     }
 
     setSubmitting(true);
+    console.log("📤 TakeExam: Submitting exam. Attempt ID:", attemptId);
+    console.log("📤 TakeExam: Current answers (local):", answers);
+
     try {
-      // Format answers for submission
-      const formattedAnswers = exam.questions.map((q) => ({
-        questionId: q.question._id,
-        answer: answers[q.question._id],
-      }));
+      const resp = await ExamService.submitExamAttempt(attemptId, {});
+      console.log("✅ TakeExam: Exam submitted successfully! Resp:", resp);
 
-      // Submit exam
-      const response = await ExamService.submitExamAttempt(id, {
-        answers: formattedAnswers,
-        timeTaken: exam.duration * 60 - timeRemaining,
-      });
-
-      const attemptId = response.data?._id || response.data?.id;
+      const result = resp.data?.data || resp.data || resp; // unwrap ApiResponse if needed
 
       toast({
         title: "Success",
-        description: "Exam submitted successfully! 🎉",
+        description: `Exam submitted! Your score: ${result.score}/${result.totalMarks}`,
       });
 
-      // Navigate to results page
+      console.log(
+        "🎯 TakeExam: Navigating to results page. Attempt ID:",
+        attemptId
+      );
       navigate(`/student/results/${attemptId}`, { replace: true });
     } catch (error) {
+      console.error("❌ TakeExam: Error submitting exam:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message || "Failed to submit exam",
+        description:
+          error.response?.data?.message ||
+          error.message ||
+          "Failed to submit exam",
       });
       setSubmitting(false);
     }
   };
 
   const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const s = Number(seconds || 0);
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
     return `${mins.toString().padStart(2, "0")}:${secs
       .toString()
       .padStart(2, "0")}`;
   };
 
   const getQuestionStatus = (index) => {
-    const questionId = exam.questions[index].question._id;
+    const questionId = examData.questions[index]._id;
     const isAnswered = answers[questionId] !== null;
     const isFlagged = flaggedQuestions.has(questionId);
 
@@ -237,24 +290,22 @@ const TakeExam = () => {
     }
   };
 
-  const answeredCount = Object.values(answers).filter((a) => a !== null).length;
-  const unansweredCount = exam?.questions.length - answeredCount || 0;
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading exam...</p>
+          <p className="text-muted-foreground">Starting exam...</p>
         </div>
       </div>
     );
   }
 
-  if (!exam) return null;
+  if (!examData) return null;
 
-  const currentQuestion = exam.questions[currentQuestionIndex];
-  const question = currentQuestion.question;
+  const answeredCount = Object.values(answers).filter((a) => a !== null).length;
+  const unansweredCount = examData.questions.length - answeredCount;
+  const currentQuestion = examData.questions[currentQuestionIndex];
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -262,15 +313,13 @@ const TakeExam = () => {
       <div className="fixed top-0 left-0 right-0 z-50 bg-background border-b">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            {/* Exam Info */}
             <div>
-              <h1 className="font-semibold text-lg">{exam.title}</h1>
+              <h1 className="font-semibold text-lg">{examData.examTitle}</h1>
               <p className="text-xs text-muted-foreground">
-                {exam.subject} • {exam.questions.length} Questions
+                {examData.questions.length} Questions
               </p>
             </div>
 
-            {/* Timer */}
             <div
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold ${
                 timeRemaining < 300
@@ -282,7 +331,6 @@ const TakeExam = () => {
               <span className="text-xl">{formatTime(timeRemaining)}</span>
             </div>
 
-            {/* Submit Button */}
             <Button
               onClick={() => setSubmitDialogOpen(true)}
               disabled={submitting}
@@ -300,7 +348,7 @@ const TakeExam = () => {
           {/* Question Section */}
           <div className="lg:col-span-3">
             <Card className="p-6">
-              {/* Question Header */}
+              {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-foreground text-background flex items-center justify-center font-semibold">
@@ -309,7 +357,7 @@ const TakeExam = () => {
                   <div>
                     <p className="text-sm text-muted-foreground">
                       Question {currentQuestionIndex + 1} of{" "}
-                      {exam.questions.length}
+                      {examData.questions.length}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {currentQuestion.marks}{" "}
@@ -320,7 +368,9 @@ const TakeExam = () => {
 
                 <Button
                   variant={
-                    flaggedQuestions.has(question._id) ? "default" : "outline"
+                    flaggedQuestions.has(currentQuestion._id)
+                      ? "default"
+                      : "outline"
                   }
                   size="sm"
                   onClick={toggleFlag}
@@ -332,20 +382,22 @@ const TakeExam = () => {
               {/* Question Text */}
               <div className="mb-6">
                 <p className="text-lg font-medium leading-relaxed">
-                  {question.questionText}
+                  {currentQuestion.questionText}
                 </p>
               </div>
 
               {/* Options */}
               <div className="space-y-3">
-                {question.type === "true-false" ? (
+                {currentQuestion.type === "true-false" ? (
                   <>
                     {["True", "False"].map((option) => (
                       <button
                         key={option}
-                        onClick={() => handleAnswer(question._id, option)}
+                        onClick={() =>
+                          handleAnswer(currentQuestion._id, option)
+                        }
                         className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
-                          answers[question._id] === option
+                          answers[currentQuestion._id] === option
                             ? "border-foreground bg-accent"
                             : "border-border hover:bg-accent"
                         }`}
@@ -353,12 +405,12 @@ const TakeExam = () => {
                         <div className="flex items-center gap-3">
                           <div
                             className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
-                              answers[question._id] === option
+                              answers[currentQuestion._id] === option
                                 ? "border-foreground bg-foreground"
                                 : "border-border"
                             }`}
                           >
-                            {answers[question._id] === option && (
+                            {answers[currentQuestion._id] === option && (
                               <div className="h-2 w-2 rounded-full bg-background" />
                             )}
                           </div>
@@ -367,22 +419,22 @@ const TakeExam = () => {
                       </button>
                     ))}
                   </>
-                ) : question.type === "multiple-correct" ? (
+                ) : currentQuestion.type === "multiple-correct" ? (
                   <>
-                    {question.options.map((option, index) => {
-                      const currentAnswers = answers[question._id] || [];
+                    {currentQuestion.options.map((option, index) => {
+                      const currentAnswers = answers[currentQuestion._id] || [];
                       const isChecked = currentAnswers.includes(option);
 
                       return (
-                        <button
+                        <div
                           key={index}
                           onClick={() => {
                             const newAnswers = isChecked
                               ? currentAnswers.filter((a) => a !== option)
                               : [...currentAnswers, option];
-                            handleAnswer(question._id, newAnswers);
+                            handleAnswer(currentQuestion._id, newAnswers);
                           }}
-                          className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
+                          className={`w-full p-4 rounded-lg border-2 text-left transition-all cursor-pointer ${
                             isChecked
                               ? "border-foreground bg-accent"
                               : "border-border hover:bg-accent"
@@ -397,18 +449,20 @@ const TakeExam = () => {
                               {option}
                             </span>
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </>
                 ) : (
                   <>
-                    {question.options.map((option, index) => (
+                    {currentQuestion.options.map((option, index) => (
                       <button
                         key={index}
-                        onClick={() => handleAnswer(question._id, option)}
+                        onClick={() =>
+                          handleAnswer(currentQuestion._id, option)
+                        }
                         className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
-                          answers[question._id] === option
+                          answers[currentQuestion._id] === option
                             ? "border-foreground bg-accent"
                             : "border-border hover:bg-accent"
                         }`}
@@ -416,12 +470,12 @@ const TakeExam = () => {
                         <div className="flex items-center gap-3">
                           <div
                             className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
-                              answers[question._id] === option
+                              answers[currentQuestion._id] === option
                                 ? "border-foreground bg-foreground"
                                 : "border-border"
                             }`}
                           >
-                            {answers[question._id] === option && (
+                            {answers[currentQuestion._id] === option && (
                               <div className="h-2 w-2 rounded-full bg-background" />
                             )}
                           </div>
@@ -451,7 +505,9 @@ const TakeExam = () => {
 
                 <Button
                   onClick={goToNextQuestion}
-                  disabled={currentQuestionIndex === exam.questions.length - 1}
+                  disabled={
+                    currentQuestionIndex === examData.questions.length - 1
+                  }
                 >
                   Next
                   <ChevronRight className="ml-2 h-4 w-4" />
@@ -468,7 +524,6 @@ const TakeExam = () => {
                 Question Palette
               </h3>
 
-              {/* Stats */}
               <div className="grid grid-cols-3 gap-2 mb-4 text-center text-xs">
                 <div className="p-2 rounded-lg bg-green-500/10">
                   <p className="font-semibold text-green-600">
@@ -490,9 +545,8 @@ const TakeExam = () => {
                 </div>
               </div>
 
-              {/* Question Grid */}
               <div className="grid grid-cols-5 gap-2">
-                {exam.questions.map((q, index) => {
+                {examData.questions.map((q, index) => {
                   const status = getQuestionStatus(index);
                   return (
                     <button
@@ -523,30 +577,7 @@ const TakeExam = () => {
               <div className="space-y-3">
                 <p>Are you sure you want to submit your exam?</p>
                 <div className="p-4 rounded-lg bg-secondary space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Total Questions:</span>
-                    <span className="font-semibold">
-                      {exam.questions.length}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Answered:</span>
-                    <span className="font-semibold text-green-600">
-                      {answeredCount}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Unanswered:</span>
-                    <span className="font-semibold text-red-600">
-                      {unansweredCount}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Time Remaining:</span>
-                    <span className="font-semibold">
-                      {formatTime(timeRemaining)}
-                    </span>
-                  </div>
+                  ...
                 </div>
                 {unansweredCount > 0 && (
                   <p className="text-orange-600 flex items-center gap-2">

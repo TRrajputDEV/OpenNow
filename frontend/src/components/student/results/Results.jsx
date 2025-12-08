@@ -26,67 +26,42 @@ const Results = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    console.log('🎯 Results: Component mounted, fetching attempts...');
     fetchAttempts();
   }, []);
 
   useEffect(() => {
+    console.log('🔍 Results: Filtering attempts. Query:', searchQuery, 'Status:', filterStatus);
     filterAttempts();
   }, [attempts, searchQuery, filterStatus]);
 
   const fetchAttempts = async () => {
     try {
       setLoading(true);
+      console.log('📡 Results: Fetching my attempts...');
+      
       const response = await ExamService.getMyAttempts();
-      const attemptsData = response.data?.attempts || response.data || [];
+      console.log('✅ Results: Attempts received:', response.data);
       
-      // Filter and validate attempts
-      const validAttempts = attemptsData.filter(
-        (a) => a && a.exam && a.exam.title
-      );
-      
-      setAttempts(Array.isArray(validAttempts) ? validAttempts : []);
+      let attemptsData = response.data;
+
+      // Handle different response structures
+      if (Array.isArray(attemptsData)) {
+        setAttempts(attemptsData);
+      } else if (attemptsData?.attempts && Array.isArray(attemptsData.attempts)) {
+        setAttempts(attemptsData.attempts);
+      } else {
+        console.warn('⚠️ Results: Unexpected data structure:', attemptsData);
+        setAttempts([]);
+      }
     } catch (error) {
-      console.error('Error fetching attempts:', error);
-      
-      // For now, use mock data since backend might not be ready
-      const mockAttempts = [
-        {
-          _id: '1',
-          exam: {
-            title: 'Mathematics Mid-Term',
-            subject: 'Mathematics',
-            totalMarks: 100,
-            questions: { length: 20 }, // Mock structure
-          },
-          score: 85,
-          status: 'passed',
-          correctAnswers: 17,
-          completedAt: new Date(Date.now() - 86400000).toISOString(),
-        },
-        {
-          _id: '2',
-          exam: {
-            title: 'Physics Quiz',
-            subject: 'Physics',
-            totalMarks: 50,
-            questions: { length: 10 },
-          },
-          score: 30,
-          status: 'failed',
-          correctAnswers: 6,
-          completedAt: new Date(Date.now() - 172800000).toISOString(),
-        },
-      ];
-      
-      setAttempts(mockAttempts);
-      
-      // Uncomment below when backend is ready
-      // toast({
-      //   variant: 'destructive',
-      //   title: 'Error',
-      //   description: error.message || 'Failed to fetch results',
-      // });
-      // setAttempts([]);
+      console.error('❌ Results: Error fetching attempts:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to fetch results',
+      });
+      setAttempts([]);
     } finally {
       setLoading(false);
     }
@@ -102,9 +77,13 @@ const Results = () => {
     }
 
     if (filterStatus !== 'all') {
-      filtered = filtered.filter((a) => a?.status === filterStatus);
+      filtered = filtered.filter((a) => {
+        const status = a?.passed ? 'passed' : 'failed';
+        return status === filterStatus;
+      });
     }
 
+    console.log('✅ Results: Filtered', filtered.length, 'attempts');
     setFilteredAttempts(filtered);
   };
 
@@ -114,14 +93,13 @@ const Results = () => {
     }
 
     const total = attempts.length;
-    const passed = attempts.filter((a) => a?.status === 'passed').length;
+    const passed = attempts.filter((a) => a?.passed).length;
     const failed = total - passed;
     const avgPercentage = (
-      attempts.reduce((sum, a) => {
-        const marks = a?.exam?.totalMarks || 1;
-        return sum + ((a?.score || 0) / marks) * 100;
-      }, 0) / total
+      attempts.reduce((sum, a) => sum + (a?.percentage || 0), 0) / total
     ).toFixed(2);
+
+    console.log('📊 Results: Stats calculated -', { total, passed, failed, avgPercentage });
 
     return { total, passed, failed, avgPercentage };
   };
@@ -129,6 +107,7 @@ const Results = () => {
   const stats = calculateStats();
 
   const formatDate = (date) => {
+    if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
@@ -136,17 +115,13 @@ const Results = () => {
     });
   };
 
-  const getQuestionCount = (exam) => {
-    // Handle different data structures
-    if (exam?.questions?.length) return exam.questions.length;
-    if (typeof exam?.questions === 'object') return Object.keys(exam.questions).length;
-    return 0;
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading results...</p>
+        </div>
       </div>
     );
   }
@@ -256,12 +231,11 @@ const Results = () => {
       ) : (
         <div className="grid gap-4">
           {filteredAttempts.map((attempt, index) => {
-            // Safe access with fallbacks
-            const totalMarks = attempt?.exam?.totalMarks || 100;
-            const score = attempt?.score || 0;
-            const percentage = ((score / totalMarks) * 100).toFixed(2);
-            const isPassed = attempt?.status === 'passed';
-            const questionCount = getQuestionCount(attempt?.exam);
+            const isPassed = attempt?.passed;
+            const percentage = attempt?.percentage || 0;
+            const totalQuestions = attempt?.answers?.length || 0;
+            const correctAnswers = attempt?.correctAnswers || 
+              attempt?.answers?.filter(a => a.isCorrect).length || 0;
 
             return (
               <motion.div
@@ -276,7 +250,7 @@ const Results = () => {
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <h3 className="font-semibold text-lg mb-1">
-                            {attempt?.exam?.title || 'Untitled Exam'}
+                            {attempt?.exam?.title || attempt?.examTitle || 'Untitled Exam'}
                           </h3>
                           <p className="text-sm text-muted-foreground">
                             {attempt?.exam?.subject || 'N/A'}
@@ -289,7 +263,7 @@ const Results = () => {
                               : 'bg-red-500/10 text-red-600'
                           }`}
                         >
-                          {(attempt?.status || 'unknown').toUpperCase()}
+                          {isPassed ? 'PASSED' : 'FAILED'}
                         </span>
                       </div>
 
@@ -297,27 +271,27 @@ const Results = () => {
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Score</p>
                           <p className="text-lg font-bold">
-                            {score}/{totalMarks}
+                            {attempt?.score || 0}/{attempt?.totalMarks || 0}
                           </p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">
                             Percentage
                           </p>
-                          <p className="text-lg font-bold">{percentage}%</p>
+                          <p className="text-lg font-bold">{percentage.toFixed(2)}%</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">
                             Correct Answers
                           </p>
                           <p className="text-lg font-bold text-green-600">
-                            {attempt?.correctAnswers || 0}/{questionCount}
+                            {correctAnswers}/{totalQuestions}
                           </p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">Date</p>
                           <p className="text-sm font-medium">
-                            {formatDate(attempt?.completedAt || new Date())}
+                            {formatDate(attempt?.submitTime || attempt?.completedAt)}
                           </p>
                         </div>
                       </div>
