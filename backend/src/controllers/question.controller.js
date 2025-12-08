@@ -1,10 +1,8 @@
-// controllers/question.controller.js
+
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { Question } from '../models/question.model.js';
-
-// ==================== CREATE QUESTION ====================
 
 /**
  * @desc    Create new question (Teacher/Admin)
@@ -25,12 +23,12 @@ export const createQuestion = asyncHandler(async (req, res) => {
         tags
     } = req.body;
 
-    // Validation
+    
     if (!type || !questionText || !correctAnswer || !category || !subject) {
         throw new ApiError(400, "Type, question text, correct answer, category, and subject are required");
     }
 
-    // Create question
+    
     const question = await Question.create({
         type,
         questionText,
@@ -51,8 +49,6 @@ export const createQuestion = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== GET QUESTIONS ====================
-
 /**
  * @desc    Get all questions with filters (Teacher/Admin)
  * @route   GET /api/v1/questions
@@ -63,15 +59,14 @@ export const getQuestions = asyncHandler(async (req, res) => {
     const limit = parseInt(req.query.limit, 10) || 20;
     const startIndex = (page - 1) * limit;
 
-    // Build query
+    
     const query = { isActive: true };
 
-    // Filter by creator (teachers see only their questions, admins see all)
+    
     if (req.user.role === 'teacher') {
         query.createdBy = req.user._id;
     }
 
-    // Filters
     if (req.query.type) {
         query.type = req.query.type;
     }
@@ -92,12 +87,10 @@ export const getQuestions = asyncHandler(async (req, res) => {
         query.source = req.query.source;
     }
 
-    // Search by question text
     if (req.query.search) {
         query.questionText = { $regex: req.query.search, $options: 'i' };
     }
 
-    // Execute query
     const questions = await Question.find(query)
         .populate('createdBy', 'username email')
         .sort({ createdAt: -1 })
@@ -146,8 +139,6 @@ export const getQuestion = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== UPDATE QUESTION ====================
-
 /**
  * @desc    Update question
  * @route   PUT /api/v1/questions/:id
@@ -160,12 +151,10 @@ export const updateQuestion = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Question not found");
     }
 
-    // Teachers can only update their own questions
     if (req.user.role === 'teacher' && question.createdBy.toString() !== req.user._id.toString()) {
         throw new ApiError(403, "Not authorized to update this question");
     }
 
-    // Update fields
     const updateData = {};
     const allowedFields = ['questionText', 'options', 'correctAnswer', 'marks', 'difficulty', 'category', 'subject', 'explanation', 'tags', 'isActive'];
     
@@ -190,7 +179,6 @@ export const updateQuestion = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== DELETE QUESTION ====================
 
 /**
  * @desc    Delete question (soft delete)
@@ -204,12 +192,10 @@ export const deleteQuestion = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Question not found");
     }
 
-    // Teachers can only delete their own questions
     if (req.user.role === 'teacher' && question.createdBy.toString() !== req.user._id.toString()) {
         throw new ApiError(403, "Not authorized to delete this question");
     }
 
-    // Soft delete
     question.isActive = false;
     await question.save();
 
@@ -218,7 +204,6 @@ export const deleteQuestion = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== BULK OPERATIONS ====================
 
 /**
  * @desc    Get question statistics
@@ -287,11 +272,3 @@ export const getQuestionStats = asyncHandler(async (req, res) => {
     );
 });
 
-// export {
-//     createQuestion,
-//     getQuestions,
-//     getQuestion,
-//     updateQuestion,
-//     deleteQuestion,
-//     getQuestionStats
-// };

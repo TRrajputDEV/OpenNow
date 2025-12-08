@@ -6,7 +6,6 @@ import { ExamAttempt } from "../models/examAttempt.model.js";
 import { Exam } from "../models/exam.model.js";
 import { Question } from "../models/question.model.js";
 
-// ==================== START EXAM ====================
 
 /**
  * @desc    Start exam attempt
@@ -142,7 +141,6 @@ export const startExam = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, examData, "Exam started successfully"));
 });
 
-// ==================== SAVE ANSWER ====================
 
 /**
  * @desc    Save/update answer during exam
@@ -409,7 +407,6 @@ export const submitExam = asyncHandler(async (req, res) => {
     );
 });
 
-// ==================== GET ATTEMPT RESULT ====================
 
 /**
  * @desc    Get attempt result
@@ -478,7 +475,6 @@ export const getAttemptResult = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, result, "Result fetched successfully"));
 });
 
-// ==================== GET STUDENT ATTEMPTS ====================
 
 /**
  * @desc    Get all attempts by student
@@ -510,7 +506,6 @@ export const getMyAttempts = asyncHandler(async (req, res) => {
     throw new ApiError(500, `Error fetching attempts: ${error.message}`);
   }
 });
-// ==================== GET EXAM ATTEMPTS (TEACHER) ====================
 
 /**
  * @desc    Get all attempts for an exam (Teacher)

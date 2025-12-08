@@ -1,23 +1,16 @@
-// controllers/user.controller.js
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { User } from '../models/user.model.js';
 import jwt from 'jsonwebtoken';
 
-// ==================== HELPER FUNCTIONS ====================
-
-/**
- * Generate access and refresh tokens for a user
- */
 const generateAccessAndRefreshTokens = async (user) => {
     try {
-        // ✅ Accept user object instead of re-fetching
         const accessToken = user.generateAccessToken();
         const refreshToken = user.generateRefreshToken();
 
         user.refreshToken = refreshToken;
-        // ✅ Now we save both lastLogin AND refreshToken in ONE operation
+       
         await user.save({ validateBeforeSave: false });
 
         return { accessToken, refreshToken };
@@ -27,7 +20,6 @@ const generateAccessAndRefreshTokens = async (user) => {
 };
 
 
-// ==================== AUTHENTICATION CONTROLLERS ====================
 
 /**
  * @desc    Register new user
@@ -37,7 +29,6 @@ const generateAccessAndRefreshTokens = async (user) => {
 export const registerUser = asyncHandler(async (req, res) => {
     const { username, email, password, role, institution, phone, rollNumber, class: userClass, section } = req.body;
 
-    // Validation
     if (!username || !email || !password) {
         throw new ApiError(400, "Username, email, and password are required");
     }
@@ -46,7 +37,6 @@ export const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Fields cannot be empty");
     }
 
-    // Check if user already exists
     const existingUser = await User.findOne({
         $or: [{ username }, { email }]
     });
@@ -55,25 +45,20 @@ export const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(409, "User with this email or username already exists");
     }
 
-    // Create user object
     const userData = {
         username: username.toLowerCase(),
         email: email.toLowerCase(),
         password,
         role: role || 'student',
     };
-
-    // Add optional fields if provided
     if (institution) userData.institution = institution;
     if (phone) userData.phone = phone;
     if (rollNumber) userData.rollNumber = rollNumber;
     if (userClass) userData.class = userClass;
     if (section) userData.section = section;
 
-    // Create user
     const user = await User.create(userData);
 
-    // Fetch created user without sensitive fields
     const createdUser = await User.findById(user._id).select("-password -refreshToken");
 
     if (!createdUser) {
@@ -102,7 +87,6 @@ export const loginUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Password is required");
     }
 
-    // Find user and explicitly select password field
     const user = await User.findOne({
         $or: [{ email }, { username }]
     }).select("+password");
@@ -111,34 +95,27 @@ export const loginUser = asyncHandler(async (req, res) => {
         throw new ApiError(404, "User does not exist");
     }
 
-    // Check if user is active
     if (!user.isActive) {
         throw new ApiError(403, "Account is deactivated. Please contact support");
     }
-
-    // Verify password
     const isPasswordValid = await user.isPasswordCorrect(password);
 
     if (!isPasswordValid) {
         throw new ApiError(401, "Invalid credentials");
     }
 
-    // ✅ FIX: Update last login FIRST on the current user object
     user.lastLogin = new Date();
-    // Don't save yet - we'll do it together with refreshToken
-
-    // ✅ Modified: Pass the user object instead of just ID
+ 
     const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user);
 
-    // Get user without sensitive fields
     const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
 
-    // Cookie options
+   
     const options = {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        maxAge: 7 * 24 * 60 * 60 * 1000, 
     };
 
     return res
@@ -165,7 +142,7 @@ export const loginUser = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const logoutUser = asyncHandler(async (req, res) => {
-    // Clear refresh token from database
+
     await User.findByIdAndUpdate(
         req.user._id,
         {
@@ -211,7 +188,6 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
             throw new ApiError(401, "Invalid refresh token");
         }
 
-        // ✅ ADD: Check if user is active
         if (!user.isActive) {
             throw new ApiError(403, "Account is deactivated");
         }
@@ -220,7 +196,6 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
             throw new ApiError(401, "Refresh token is expired or has been used");
         }
 
-        // ✅ OPTIMIZATION: Pass user object instead of re-fetching
         const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(user);
 
         const options = {
@@ -245,8 +220,6 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
     }
 });
 
-
-// ==================== USER PROFILE CONTROLLERS ====================
 
 /**
  * @desc    Get current user profile
@@ -297,7 +270,6 @@ export const updateAccountDetails = asyncHandler(async (req, res) => {
 export const changeCurrentPassword = asyncHandler(async (req, res) => {
     const { oldPassword, newPassword } = req.body;
 
-    // Validation
     if (!oldPassword || !newPassword) {
         throw new ApiError(400, "Both old and new passwords are required");
     }
@@ -306,21 +278,18 @@ export const changeCurrentPassword = asyncHandler(async (req, res) => {
         throw new ApiError(400, "New password must be at least 6 characters");
     }
 
-    // Find user with password field
     const user = await User.findById(req.user._id).select("+password");
 
     if (!user) {
         throw new ApiError(404, "User not found");
     }
 
-    // Verify old password
     const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
 
     if (!isPasswordCorrect) {
         throw new ApiError(400, "Current password is incorrect");
     }
 
-    // Update password
     user.password = newPassword;
     await user.save();
 
@@ -329,7 +298,6 @@ export const changeCurrentPassword = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, {}, "Password changed successfully"));
 });
 
-// ==================== ADMIN USER MANAGEMENT ====================
 
 /**
  * @desc    Get all users (with pagination, filtering, search)
@@ -341,7 +309,6 @@ export const getUsers = asyncHandler(async (req, res) => {
     const limit = parseInt(req.query.limit, 10) || 25;
     const startIndex = (page - 1) * limit;
 
-    // Build query
     const query = {};
 
     if (req.query.role) {
@@ -364,7 +331,6 @@ export const getUsers = asyncHandler(async (req, res) => {
         ];
     }
 
-    // Execute query
     const users = await User.find(query)
         .select("-password -refreshToken")
         .sort({ createdAt: -1 })
