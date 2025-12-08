@@ -1,276 +1,262 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import {
-  FileText,
-  Clock,
+  BookOpen,
   Award,
+  Clock,
   TrendingUp,
+  CheckCircle2,
+  XCircle,
   Calendar,
   ArrowRight,
-  CheckCircle2,
-  AlertCircle,
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { ExamService } from '@/services';
+import { useToast } from '@/hooks/use-toast';
 
 const StudentDashboard = () => {
-  const { user } = useAuth();
-  const [stats, setStats] = useState({
-    availableExams: 0,
-    completedExams: 0,
-    averageScore: 0,
-    upcomingExams: 0,
-  });
+  const [stats, setStats] = useState(null);
+  const [recentAttempts, setRecentAttempts] = useState([]);
   const [upcomingExams, setUpcomingExams] = useState([]);
-  const [recentResults, setRecentResults] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
+    console.log('🎯 StudentDashboard: Loading dashboard data...');
     fetchDashboardData();
   }, []);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API calls when endpoints are ready
-      
-      // Mock data for now
-      setStats({
-        availableExams: 5,
-        completedExams: 3,
-        averageScore: 85,
-        upcomingExams: 2,
+      console.log('📡 StudentDashboard: Fetching stats and attempts...');
+
+      // Fetch stats and attempts in parallel
+      const [statsResponse, attemptsResponse, examsResponse] = await Promise.all([
+        ExamService.getAttemptStats().catch(() => ({ data: null })),
+        ExamService.getMyAttempts().catch(() => ({ data: [] })),
+        ExamService.getAllExams().catch(() => ({ data: [] })),
+      ]);
+
+      console.log('✅ StudentDashboard: Stats:', statsResponse.data);
+      console.log('✅ StudentDashboard: Attempts:', attemptsResponse.data);
+      console.log('✅ StudentDashboard: Exams:', examsResponse.data);
+
+      // Set stats
+      setStats(statsResponse.data || {
+        totalAttempts: 0,
+        passed: 0,
+        failed: 0,
+        averageScore: 0,
       });
 
-      setUpcomingExams([
-        {
-          _id: '1',
-          title: 'Mathematics Mid-Term',
-          subject: 'Mathematics',
-          startTime: new Date(Date.now() + 86400000).toISOString(),
-          duration: 60,
-          totalMarks: 100,
-        },
-      ]);
+      // Set recent attempts (last 5)
+      const attempts = Array.isArray(attemptsResponse.data)
+        ? attemptsResponse.data
+        : attemptsResponse.data?.attempts || [];
+      setRecentAttempts(attempts.slice(0, 5));
 
-      setRecentResults([
-        {
-          _id: '1',
-          examTitle: 'Physics Quiz',
-          score: 85,
-          totalMarks: 100,
-          percentage: 85,
-          completedAt: new Date(Date.now() - 86400000).toISOString(),
-        },
-      ]);
+      // Set upcoming exams (published and not attempted)
+      const exams = Array.isArray(examsResponse.data)
+        ? examsResponse.data
+        : examsResponse.data?.exams || [];
+      
+      const published = exams.filter(e => e.isPublished);
+      setUpcomingExams(published.slice(0, 5));
+
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('❌ StudentDashboard: Error fetching data:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to load dashboard data',
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  const statsCards = [
-    {
-      title: 'Available Exams',
-      value: stats.availableExams,
-      icon: FileText,
-      color: 'from-blue-500 to-blue-600',
-      link: '/student/exams',
-    },
-    {
-      title: 'Completed',
-      value: stats.completedExams,
-      icon: CheckCircle2,
-      color: 'from-green-500 to-green-600',
-      link: '/student/history',
-    },
-    {
-      title: 'Average Score',
-      value: `${stats.averageScore}%`,
-      icon: TrendingUp,
-      color: 'from-purple-500 to-purple-600',
-      link: '/student/results',
-    },
-    {
-      title: 'Upcoming',
-      value: stats.upcomingExams,
-      icon: Calendar,
-      color: 'from-orange-500 to-orange-600',
-      link: '/student/exams',
-    },
-  ];
-
   const formatDate = (date) => {
+    if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-IN', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
     });
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading dashboard...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
-      {/* Welcome Section */}
+    <div className="space-y-6">
+      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold">
-          Welcome back, {user?.fullName}! 👋
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Ready to ace your exams today?
-        </p>
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <p className="text-muted-foreground mt-1">Welcome back! Here's your progress</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {statsCards.map((stat, index) => (
-          <motion.div
-            key={stat.title}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-          >
-            <Link to={stat.link}>
-              <Card className="p-6 hover:shadow-lg transition-shadow cursor-pointer group">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">
-                      {stat.title}
-                    </p>
-                    <p className="text-3xl font-bold">{stat.value}</p>
-                  </div>
-                  <div
-                    className={`h-12 w-12 rounded-lg bg-gradient-to-br ${stat.color} flex items-center justify-center group-hover:scale-110 transition-transform`}
-                  >
-                    <stat.icon className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-              </Card>
-            </Link>
-          </motion.div>
-        ))}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <BookOpen className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Total Attempts</p>
+              <p className="text-2xl font-bold">{stats?.totalAttempts || 0}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Passed</p>
+              <p className="text-2xl font-bold text-green-600">{stats?.passed || 0}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <XCircle className="h-5 w-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Failed</p>
+              <p className="text-2xl font-bold text-red-600">{stats?.failed || 0}</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+              <TrendingUp className="h-5 w-5 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Average Score</p>
+              <p className="text-2xl font-bold">{stats?.averageScore || 0}%</p>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Main Content Grid */}
+      {/* Recent Attempts & Upcoming Exams */}
       <div className="grid gap-6 lg:grid-cols-2">
+        {/* Recent Attempts */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Recent Attempts</h2>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/student/results">
+                View All
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+
+          {recentAttempts.length === 0 ? (
+            <div className="text-center py-8">
+              <Award className="h-12 w-12 mx-auto text-muted-foreground/20 mb-2" />
+              <p className="text-muted-foreground text-sm">No attempts yet</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentAttempts.map((attempt) => (
+                <Link
+                  key={attempt._id}
+                  to={`/student/results/${attempt._id}`}
+                  className="block p-3 rounded-lg border hover:bg-accent transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">
+                        {attempt.exam?.title || attempt.examTitle}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDate(attempt.submitTime || attempt.completedAt)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">
+                          {attempt.score}/{attempt.totalMarks}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {attempt.percentage?.toFixed(0)}%
+                        </p>
+                      </div>
+                      <span
+                        className={`px-2 py-1 rounded text-xs font-medium ${
+                          attempt.passed
+                            ? 'bg-green-500/10 text-green-600'
+                            : 'bg-red-500/10 text-red-600'
+                        }`}
+                      >
+                        {attempt.passed ? 'Pass' : 'Fail'}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </Card>
+
         {/* Upcoming Exams */}
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Upcoming Exams</h2>
+            <h2 className="text-xl font-semibold">Available Exams</h2>
             <Button asChild variant="ghost" size="sm">
-              <Link to="/student/exams">View All</Link>
+              <Link to="/student/exams">
+                View All
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
             </Button>
           </div>
 
           {upcomingExams.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Calendar className="h-12 w-12 mx-auto mb-2 opacity-20" />
-              <p>No upcoming exams</p>
-              <Button asChild className="mt-4" size="sm" variant="outline">
-                <Link to="/student/exams">Browse Available Exams</Link>
-              </Button>
+            <div className="text-center py-8">
+              <Calendar className="h-12 w-12 mx-auto text-muted-foreground/20 mb-2" />
+              <p className="text-muted-foreground text-sm">No exams available</p>
             </div>
           ) : (
             <div className="space-y-3">
               {upcomingExams.map((exam) => (
                 <Link
                   key={exam._id}
-                  to={`/student/exams/${exam._id}`}
-                  className="block p-4 rounded-lg border hover:bg-accent transition-colors"
+                  to={`/student/exams`}
+                  className="block p-3 rounded-lg border hover:bg-accent transition-colors"
                 >
-                  <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center justify-between">
                     <div className="flex-1">
-                      <h3 className="font-medium mb-1">{exam.title}</h3>
-                      <p className="text-xs text-muted-foreground">
-                        {exam.subject}
-                      </p>
-                    </div>
-                    <span className="text-xs px-2 py-1 rounded-full bg-blue-500/10 text-blue-600">
-                      Upcoming
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {formatDate(exam.startTime)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {exam.duration} min
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Award className="h-3 w-3" />
-                      {exam.totalMarks} marks
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* Recent Results */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Recent Results</h2>
-            <Button asChild variant="ghost" size="sm">
-              <Link to="/student/results">View All</Link>
-            </Button>
-          </div>
-
-          {recentResults.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Award className="h-12 w-12 mx-auto mb-2 opacity-20" />
-              <p>No results yet</p>
-              <p className="text-sm mt-1">Take an exam to see your results here</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {recentResults.map((result) => (
-                <Link
-                  key={result._id}
-                  to={`/student/results/${result._id}`}
-                  className="block p-4 rounded-lg border hover:bg-accent transition-colors"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h3 className="font-medium mb-1">{result.examTitle}</h3>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDate(result.completedAt)}
-                      </p>
+                      <p className="font-medium text-sm">{exam.title}</p>
+                      <p className="text-xs text-muted-foreground">{exam.subject}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold">
-                        {result.percentage}%
+                      <p className="text-xs text-muted-foreground">
+                        {exam.duration} mins
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {result.score}/{result.totalMarks}
+                        {exam.totalMarks} marks
                       </p>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-xs px-2 py-1 rounded-full ${
-                        result.percentage >= 40
-                          ? 'bg-green-500/10 text-green-600'
-                          : 'bg-red-500/10 text-red-600'
-                      }`}
-                    >
-                      {result.percentage >= 40 ? 'Passed' : 'Failed'}
-                    </span>
-                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
                   </div>
                 </Link>
               ))}
@@ -278,57 +264,6 @@ const StudentDashboard = () => {
           )}
         </Card>
       </div>
-
-      {/* Quick Actions */}
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-        <div className="grid md:grid-cols-3 gap-4">
-          <Link
-            to="/student/exams"
-            className="flex items-center gap-3 p-4 rounded-lg border hover:bg-accent transition-colors group"
-          >
-            <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-              <FileText className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="font-medium">Browse Exams</p>
-              <p className="text-xs text-muted-foreground">
-                View all available exams
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            to="/student/results"
-            className="flex items-center gap-3 p-4 rounded-lg border hover:bg-accent transition-colors group"
-          >
-            <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
-              <Award className="h-5 w-5 text-green-600" />
-            </div>
-            <div>
-              <p className="font-medium">My Results</p>
-              <p className="text-xs text-muted-foreground">
-                Check your performance
-              </p>
-            </div>
-          </Link>
-
-          <Link
-            to="/student/history"
-            className="flex items-center gap-3 p-4 rounded-lg border hover:bg-accent transition-colors group"
-          >
-            <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-              <Clock className="h-5 w-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="font-medium">History</p>
-              <p className="text-xs text-muted-foreground">
-                View past attempts
-              </p>
-            </div>
-          </Link>
-        </div>
-      </Card>
     </div>
   );
 };
