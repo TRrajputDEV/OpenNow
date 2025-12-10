@@ -4,9 +4,9 @@ import { DB_NAME } from "../constants.js";
 const connectDB = async () => {
   try {
     const options = {
-      serverSelectionTimeoutMS: 5000, // Retry for 5s before failing
-      socketTimeoutMS: 45000,         // Close idle sockets after 45s
-      family: 4,                      // Force IPv4 (Atlas-safe)
+      serverSelectionTimeoutMS: 5000, 
+      socketTimeoutMS: 45000,        
+      family: 4,                      
       retryWrites: true,
       w: "majority"
     };
@@ -18,7 +18,6 @@ const connectDB = async () => {
 
     console.log(`✅ MongoDB connected → ${conn.connection.host}`);
 
-    // Connection event handlers (lightweight)
     mongoose.connection.on("disconnected", () =>
       console.warn("⚠️ MongoDB disconnected — attempting to reconnect...")
     );
@@ -27,7 +26,6 @@ const connectDB = async () => {
       console.log("🔁 MongoDB reconnected")
     );
 
-    // Graceful shutdown
     process.on("SIGINT", async () => {
       await mongoose.connection.close();
       console.log("🛑 MongoDB connection closed (app terminated)");

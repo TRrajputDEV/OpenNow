@@ -1,4 +1,3 @@
-// models/examAttempt.model.js
 import mongoose from 'mongoose';
 
 const AnswerSchema = new mongoose.Schema({
@@ -8,7 +7,7 @@ const AnswerSchema = new mongoose.Schema({
         required: true
     },
     selectedAnswer: {
-        type: mongoose.Schema.Types.Mixed, // String for single, Array for multiple
+        type: mongoose.Schema.Types.Mixed, 
         default: null
     },
     isCorrect: {
@@ -25,7 +24,7 @@ const AnswerSchema = new mongoose.Schema({
         required: true
     },
     timeTaken: {
-        type: Number, // in seconds
+        type: Number, 
         default: 0
     }
 }, { _id: false });
@@ -53,7 +52,7 @@ const ExamAttemptSchema = new mongoose.Schema({
         type: Date
     },
     timeSpent: {
-        type: Number, // in seconds
+        type: Number, 
         default: 0
     },
     status: {
@@ -99,18 +98,15 @@ const ExamAttemptSchema = new mongoose.Schema({
     toObject: { virtuals: true }
 });
 
-// Compound index: One attempt per student per exam
 ExamAttemptSchema.index({ exam: 1, student: 1 }, { unique: true });
 ExamAttemptSchema.index({ student: 1, status: 1 });
 ExamAttemptSchema.index({ exam: 1, status: 1 });
 
-// Virtual for result status
 ExamAttemptSchema.virtual('resultStatus').get(function() {
     if (this.status === 'in-progress') return 'pending';
     return this.passed ? 'pass' : 'fail';
 });
 
-// Virtual for grade
 ExamAttemptSchema.virtual('grade').get(function() {
     const percentage = this.percentage;
     if (percentage >= 90) return 'A+';
@@ -121,23 +117,19 @@ ExamAttemptSchema.virtual('grade').get(function() {
     return 'F';
 });
 
-// Calculate score and percentage before saving
 ExamAttemptSchema.pre('save', function(next) {
     if (this.status === 'submitted' || this.status === 'auto-submitted') {
-        // Calculate total score
+      
         this.score = this.answers.reduce((sum, ans) => sum + ans.marksAwarded, 0);
-        
-        // Calculate percentage
+  
         if (this.totalMarks > 0) {
             this.percentage = Math.round((this.score / this.totalMarks) * 100 * 100) / 100;
         }
         
-        // Set submit time if not set
         if (!this.submitTime) {
             this.submitTime = new Date();
         }
         
-        // Calculate time spent
         if (this.startTime && this.submitTime) {
             this.timeSpent = Math.floor((this.submitTime - this.startTime) / 1000);
         }
@@ -145,14 +137,11 @@ ExamAttemptSchema.pre('save', function(next) {
     
     next();
 });
-
-// Method to check if attempt is still valid (within exam time)
 ExamAttemptSchema.methods.isValid = function(examEndTime) {
     const now = new Date();
     return this.status === 'in-progress' && now <= examEndTime;
 };
 
-// Method to auto-submit if time expired
 ExamAttemptSchema.methods.autoSubmitIfExpired = function(examEndTime) {
     const now = new Date();
     if (this.status === 'in-progress' && now > examEndTime) {
