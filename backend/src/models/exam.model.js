@@ -1,4 +1,3 @@
-// models/exam.model.js
 import mongoose from 'mongoose';
 
 const ExamSchema = new mongoose.Schema({
@@ -26,7 +25,7 @@ const ExamSchema = new mongoose.Schema({
         default: 'Read all questions carefully before answering. Once submitted, answers cannot be changed.'
     },
     duration: {
-        type: Number, // in minutes
+        type: Number, 
         required: [true, 'Exam duration is required'],
         min: [5, 'Duration must be at least 5 minutes'],
         max: [300, 'Duration cannot exceed 300 minutes']
@@ -123,18 +122,18 @@ const ExamSchema = new mongoose.Schema({
     toObject: { virtuals: true }
 });
 
-// Indexes
+
 ExamSchema.index({ createdBy: 1, isActive: 1 });
 ExamSchema.index({ subject: 1, isPublished: 1 });
 ExamSchema.index({ startTime: 1, endTime: 1 });
 ExamSchema.index({ isPublished: 1, isActive: 1 });
 
-// Virtual for question count
+
 ExamSchema.virtual('questionCount').get(function() {
     return this.questions.length;
 });
 
-// Virtual for exam status
+
 ExamSchema.virtual('status').get(function() {
     const now = new Date();
     
@@ -144,7 +143,7 @@ ExamSchema.virtual('status').get(function() {
     return 'active';
 });
 
-// Validation: End time must be after start time
+
 ExamSchema.pre('save', function(next) {
     if (this.endTime <= this.startTime) {
         return next(new Error('End time must be after start time'));
@@ -154,7 +153,7 @@ ExamSchema.pre('save', function(next) {
         return next(new Error('Passing marks cannot exceed total marks'));
     }
     
-    // Calculate total marks from questions
+    
     if (this.questions && this.questions.length > 0) {
         this.totalMarks = this.questions.reduce((sum, q) => sum + q.marks, 0);
     }
@@ -162,13 +161,12 @@ ExamSchema.pre('save', function(next) {
     next();
 });
 
-// Method to check if exam is currently active
+
 ExamSchema.methods.isCurrentlyActive = function() {
     const now = new Date();
     return this.isPublished && now >= this.startTime && now <= this.endTime;
 };
 
-// Method to check if student can attempt
 ExamSchema.methods.canStudentAttempt = function(studentId) {
     if (!this.isPublished || !this.isActive) return false;
     if (!this.isCurrentlyActive()) return false;

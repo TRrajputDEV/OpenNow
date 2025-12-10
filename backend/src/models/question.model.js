@@ -1,4 +1,3 @@
-// models/question.model.js
 import mongoose from 'mongoose';
 
 const QuestionSchema = new mongoose.Schema({
@@ -19,7 +18,7 @@ const QuestionSchema = new mongoose.Schema({
         trim: true
     }],
     correctAnswer: {
-        type: mongoose.Schema.Types.Mixed, // String for single, Array for multiple
+        type: mongoose.Schema.Types.Mixed,
         required: [true, 'Correct answer is required']
     },
     marks: {
@@ -85,13 +84,10 @@ const QuestionSchema = new mongoose.Schema({
     toObject: { virtuals: true }
 });
 
-// Indexes for performance
 QuestionSchema.index({ createdBy: 1, isActive: 1 });
 QuestionSchema.index({ category: 1, difficulty: 1 });
 QuestionSchema.index({ subject: 1, category: 1 });
 QuestionSchema.index({ tags: 1 });
-
-// Validation: Options required for MCQ
 QuestionSchema.pre('save', function(next) {
     if (this.type === 'true-false') {
         this.options = ['True', 'False'];
@@ -112,13 +108,11 @@ QuestionSchema.pre('save', function(next) {
     next();
 });
 
-// Virtual for difficulty color (for frontend)
 QuestionSchema.virtual('difficultyLevel').get(function() {
     const levels = { easy: 1, medium: 2, hard: 3 };
     return levels[this.difficulty];
 });
 
-// Method to check if answer is correct
 QuestionSchema.methods.checkAnswer = function(studentAnswer) {
     if (this.type === 'single-correct' || this.type === 'true-false') {
         return studentAnswer === this.correctAnswer;
@@ -137,7 +131,6 @@ QuestionSchema.methods.checkAnswer = function(studentAnswer) {
     return false;
 };
 
-// Method for partial marking (multiple-correct)
 QuestionSchema.methods.calculatePartialMarks = function(studentAnswer, partialMarkingEnabled = false) {
     if (!partialMarkingEnabled || this.type !== 'multiple-correct') {
         return this.checkAnswer(studentAnswer) ? this.marks : 0;
@@ -149,9 +142,8 @@ QuestionSchema.methods.calculatePartialMarks = function(studentAnswer, partialMa
     const correctCount = studentAnswer.filter(ans => correctAnswers.includes(ans)).length;
     const wrongCount = studentAnswer.filter(ans => !correctAnswers.includes(ans)).length;
     
-    // Partial marking formula: (correct - wrong) / total_correct * marks
     const score = Math.max(0, (correctCount - wrongCount) / correctAnswers.length * this.marks);
-    return Math.round(score * 100) / 100; // Round to 2 decimals
+    return Math.round(score * 100) / 100; 
 };
 
 export const Question = mongoose.model('Question', QuestionSchema);

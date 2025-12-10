@@ -28,7 +28,7 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please provide a password'],
         minlength: [6, 'Password must be at least 6 characters'],
-        select: false  // ✅ Critical security fix
+        select: false  
     },
     refreshToken: {
         type: String,
@@ -86,7 +86,7 @@ const UserSchema = new mongoose.Schema({
             default: 'UTC'
         }
     },
-    // Teacher-specific fields
+    
     subjects: [{
         type: String,
         trim: true
@@ -96,7 +96,6 @@ const UserSchema = new mongoose.Schema({
         students: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
         createdAt: { type: Date, default: Date.now }
     }],
-    // Student-specific fields
     rollNumber: {
         type: String,
         trim: true,
@@ -116,16 +115,12 @@ const UserSchema = new mongoose.Schema({
     toObject: { virtuals: true }
 });
 
-// ✅ Compound index for common queries
 UserSchema.index({ role: 1, isActive: 1 });
-UserSchema.index({ email: 1 });  // ✅ Optimize login queries
-
-// Virtual for fullname
+UserSchema.index({ email: 1 });  
 UserSchema.virtual('fullname').get(function() {
     return this.username;
 });
 
-// Hash password before saving
 UserSchema.pre('save', async function(next) {
     if (!this.isModified('password')) return next();
     
@@ -134,7 +129,6 @@ UserSchema.pre('save', async function(next) {
     next();
 });
 
-// Compare password method
 UserSchema.methods.isPasswordCorrect = async function(password) {
     if (!this.password) {
         throw new Error('Password not selected. Use .select("+password")');
@@ -143,23 +137,21 @@ UserSchema.methods.isPasswordCorrect = async function(password) {
 };
 
 
-// ✅ Generate Access Token with role for authorization
 UserSchema.methods.generateAccessToken = function() {
     return jwt.sign(
         {
             _id: this._id,
             email: this.email,
             username: this.username,
-            role: this.role  // ✅ Added role for middleware checks
+            role: this.role  
         },
         process.env.ACCESS_TOKEN_SECRET,
         {
-            expiresIn: process.env.ACCESS_TOKEN_EXPIRY || '15m'  // ✅ Default fallback
+            expiresIn: process.env.ACCESS_TOKEN_EXPIRY || '15m' 
         }
     );
 };
 
-// ✅ Fixed typo: refreshAcessToken → generateRefreshToken
 UserSchema.methods.generateRefreshToken = function() {
     return jwt.sign(
         {
@@ -167,12 +159,11 @@ UserSchema.methods.generateRefreshToken = function() {
         },
         process.env.REFRESH_TOKEN_SECRET,
         {
-            expiresIn: process.env.REFRESH_TOKEN_EXPIRY || '7d'  // ✅ Default fallback
+            expiresIn: process.env.REFRESH_TOKEN_EXPIRY || '7d' 
         }
     );
 };
 
-// Update last login
 UserSchema.methods.updateLastLogin = function() {
     this.lastLogin = new Date();
     return this.save({ validateBeforeSave: false });
