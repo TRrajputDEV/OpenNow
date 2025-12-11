@@ -335,7 +335,7 @@ export const submitExam = asyncHandler(async (req, res) => {
   });
 
   // Update attempt with calculated results
-  attempt.status = "submitted";
+  attempt.status = "completed";
   attempt.passed = totalScore >= attempt.exam.passingMarks;
 
   await attempt.save();
@@ -417,9 +417,9 @@ export const getAttemptResult = asyncHandler(async (req, res) => {
   const { attemptId } = req.params;
 
   const attempt = await ExamAttempt.findById(attemptId)
-    .populate("exam", "title settings passingMarks")
-    .populate("student", "username email")
-    .populate("answers.question");
+    .populate("exam", "title subject passingMarks totalMarks settings createdBy") // ← ADD subject, passingMarks
+    .populate("student", "username email fullName")
+    .populate("answers.question"); // ← Make sure this populates fully
 
   if (!attempt) {
     throw new ApiError(404, "Attempt not found");
@@ -440,11 +440,14 @@ export const getAttemptResult = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Exam is still in progress");
   }
 
+  // ← UPDATED: Include all needed fields
   const result = {
     attemptId: attempt._id,
     examTitle: attempt.exam.title,
+    subject: attempt.exam.subject,           // ← ADD this
+    passingMarks: attempt.exam.passingMarks, // ← ADD this
     student: attempt.student,
-    status: attempt.status,
+    status: attempt.status === "submitted" ? "completed" : attempt.status, // ← Normalize status
     score: attempt.score,
     totalMarks: attempt.totalMarks,
     percentage: attempt.percentage,
@@ -452,21 +455,32 @@ export const getAttemptResult = asyncHandler(async (req, res) => {
     passed: attempt.passed,
     timeSpent: attempt.timeSpent,
     submitTime: attempt.submitTime,
+    exam: {  // ← ADD full exam object for frontend compatibility
+      title: attempt.exam.title,
+      subject: attempt.exam.subject,
+      passingMarks: attempt.exam.passingMarks,
+      totalMarks: attempt.exam.totalMarks,
+    },
   };
 
   // Include detailed review if allowed
   if (attempt.exam.settings.allowReview || isTeacher || isAdmin) {
     result.answers = attempt.answers.map((ans) => ({
       questionId: ans.question._id,
-      questionText: ans.question.questionText,
-      type: ans.question.type,
-      options: ans.question.options,
+      question: {  // ← Nest question data properly
+        _id: ans.question._id,
+        questionText: ans.question.questionText,
+        type: ans.question.type,
+        options: ans.question.options,
+        correctAnswer: ans.question.correctAnswer,
+        explanation: ans.question.explanation,
+      },
       selectedAnswer: ans.selectedAnswer,
-      correctAnswer: ans.question.correctAnswer,
+      answer: ans.selectedAnswer, // ← Alias for frontend
       isCorrect: ans.isCorrect,
       marksAwarded: ans.marksAwarded,
+      marks: ans.marksAwarded, // ← Alias for frontend
       maxMarks: ans.maxMarks,
-      explanation: ans.question.explanation,
     }));
   }
 
@@ -485,7 +499,7 @@ export const getMyAttempts = asyncHandler(async (req, res) => {
   try {
     const attempts = await ExamAttempt.find({
       student: req.user._id,
-      status: { $in: ["submitted", "auto-submitted"] },
+      status: { $in: ["completed", "auto-submitted"] },
     })
       .populate("exam", "title subject totalMarks")
       .sort({ createdAt: -1 })

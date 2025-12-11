@@ -33,11 +33,22 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  // ← ADD THIS FUNCTION
+  const updateUser = (updatedData) => {
+    setUser((prevUser) => {
+      const newUser = { ...prevUser, ...updatedData };
+      // Update localStorage as well
+      localStorage.setItem('user', JSON.stringify(newUser));
+      return newUser;
+    });
+  };
+
   const value = {
     user,
     login,
     register,
     logout,
+    updateUser,  // ← ADD THIS TO VALUE
     loading,
     isAuthenticated: !!user,
   };

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
   FileText,
-  History,
+  TrendingUp,  // ← Changed from History
   Award,
   User,
   LogOut,
@@ -25,7 +25,7 @@ const StudentLayout = () => {
     { name: 'Dashboard', href: '/student', icon: LayoutDashboard },
     { name: 'Available Exams', href: '/student/exams', icon: FileText },
     { name: 'My Results', href: '/student/results', icon: Award },
-    { name: 'History', href: '/student/history', icon: History },
+    { name: 'Performance', href: '/student/performance', icon: TrendingUp },  // ← Changed from History
     { name: 'Profile', href: '/student/profile', icon: User },
   ];
 

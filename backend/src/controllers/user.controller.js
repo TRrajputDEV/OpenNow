@@ -1,25 +1,23 @@
-import { asyncHandler } from '../utils/asyncHandler.js';
-import { ApiError } from '../utils/ApiError.js';
-import { ApiResponse } from '../utils/ApiResponse.js';
-import { User } from '../models/user.model.js';
-import jwt from 'jsonwebtoken';
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { User } from "../models/user.model.js";
+import jwt from "jsonwebtoken";
 
 const generateAccessAndRefreshTokens = async (user) => {
-    try {
-        const accessToken = user.generateAccessToken();
-        const refreshToken = user.generateRefreshToken();
+  try {
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
 
-        user.refreshToken = refreshToken;
-       
-        await user.save({ validateBeforeSave: false });
+    user.refreshToken = refreshToken;
 
-        return { accessToken, refreshToken };
-    } catch (error) {
-        throw new ApiError(500, "Failed to generate authentication tokens");
-    }
+    await user.save({ validateBeforeSave: false });
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(500, "Failed to generate authentication tokens");
+  }
 };
-
-
 
 /**
  * @desc    Register new user
@@ -27,47 +25,59 @@ const generateAccessAndRefreshTokens = async (user) => {
  * @access  Public
  */
 export const registerUser = asyncHandler(async (req, res) => {
-    const { username, email, password, role, institution, phone, rollNumber, class: userClass, section } = req.body;
+  const {
+    username,
+    email,
+    password,
+    role,
+    institution,
+    phone,
+    rollNumber,
+    class: userClass,
+    section,
+  } = req.body;
 
-    if (!username || !email || !password) {
-        throw new ApiError(400, "Username, email, and password are required");
-    }
+  if (!username || !email || !password) {
+    throw new ApiError(400, "Username, email, and password are required");
+  }
 
-    if ([username, email, password].some((field) => field.trim() === "")) {
-        throw new ApiError(400, "Fields cannot be empty");
-    }
+  if ([username, email, password].some((field) => field.trim() === "")) {
+    throw new ApiError(400, "Fields cannot be empty");
+  }
 
-    const existingUser = await User.findOne({
-        $or: [{ username }, { email }]
-    });
+  const existingUser = await User.findOne({
+    $or: [{ username }, { email }],
+  });
 
-    if (existingUser) {
-        throw new ApiError(409, "User with this email or username already exists");
-    }
+  if (existingUser) {
+    throw new ApiError(409, "User with this email or username already exists");
+  }
 
-    const userData = {
-        username: username.toLowerCase(),
-        email: email.toLowerCase(),
-        password,
-        role: role || 'student',
-    };
-    if (institution) userData.institution = institution;
-    if (phone) userData.phone = phone;
-    if (rollNumber) userData.rollNumber = rollNumber;
-    if (userClass) userData.class = userClass;
-    if (section) userData.section = section;
+  const userData = {
+    username: username.toLowerCase(),
+    email: email.toLowerCase(),
+    password,
+    role: role || "student",
+  };
+  if (institution) userData.institution = institution;
+  if (phone) userData.phone = phone;
+  if (rollNumber) userData.rollNumber = rollNumber;
+  if (userClass) userData.class = userClass;
+  if (section) userData.section = section;
 
-    const user = await User.create(userData);
+  const user = await User.create(userData);
 
-    const createdUser = await User.findById(user._id).select("-password -refreshToken");
+  const createdUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
 
-    if (!createdUser) {
-        throw new ApiError(500, "User registration failed");
-    }
+  if (!createdUser) {
+    throw new ApiError(500, "User registration failed");
+  }
 
-    return res.status(201).json(
-        new ApiResponse(201, createdUser, "User registered successfully")
-    );
+  return res
+    .status(201)
+    .json(new ApiResponse(201, createdUser, "User registered successfully"));
 });
 
 /**
@@ -76,65 +86,66 @@ export const registerUser = asyncHandler(async (req, res) => {
  * @access  Public
  */
 export const loginUser = asyncHandler(async (req, res) => {
-    const { email, username, password } = req.body;
+  const { email, username, password } = req.body;
 
-    // Validation
-    if (!(username || email)) {
-        throw new ApiError(400, "Username or email is required");
-    }
+  // Validation
+  if (!(username || email)) {
+    throw new ApiError(400, "Username or email is required");
+  }
 
-    if (!password) {
-        throw new ApiError(400, "Password is required");
-    }
+  if (!password) {
+    throw new ApiError(400, "Password is required");
+  }
 
-    const user = await User.findOne({
-        $or: [{ email }, { username }]
-    }).select("+password");
+  const user = await User.findOne({
+    $or: [{ email }, { username }],
+  }).select("+password");
 
-    if (!user) {
-        throw new ApiError(404, "User does not exist");
-    }
+  if (!user) {
+    throw new ApiError(404, "User does not exist");
+  }
 
-    if (!user.isActive) {
-        throw new ApiError(403, "Account is deactivated. Please contact support");
-    }
-    const isPasswordValid = await user.isPasswordCorrect(password);
+  if (!user.isActive) {
+    throw new ApiError(403, "Account is deactivated. Please contact support");
+  }
+  const isPasswordValid = await user.isPasswordCorrect(password);
 
-    if (!isPasswordValid) {
-        throw new ApiError(401, "Invalid credentials");
-    }
+  if (!isPasswordValid) {
+    throw new ApiError(401, "Invalid credentials");
+  }
 
-    user.lastLogin = new Date();
- 
-    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user);
+  user.lastLogin = new Date();
 
-    const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+  const { accessToken, refreshToken } =
+    await generateAccessAndRefreshTokens(user);
 
-   
-    const options = {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000, 
-    };
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
 
-    return res
-        .status(200)
-        .cookie("accessToken", accessToken, options)
-        .cookie("refreshToken", refreshToken, options)
-        .json(
-            new ApiResponse(
-                200,
-                {
-                    user: loggedInUser,
-                    accessToken,
-                    refreshToken
-                },
-                "User logged in successfully"
-            )
-        );
+  const options = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  };
+
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedInUser,
+          accessToken,
+          refreshToken,
+        },
+        "User logged in successfully"
+      )
+    );
 });
-
 
 /**
  * @desc    Logout user
@@ -142,26 +153,25 @@ export const loginUser = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const logoutUser = asyncHandler(async (req, res) => {
+  await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $unset: { refreshToken: 1 },
+    },
+    { new: true }
+  );
 
-    await User.findByIdAndUpdate(
-        req.user._id,
-        {
-            $unset: { refreshToken: 1 }
-        },
-        { new: true }
-    );
+  const options = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  };
 
-    const options = {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    };
-
-    return res
-        .status(200)
-        .clearCookie("accessToken", options)
-        .clearCookie("refreshToken", options)
-        .json(new ApiResponse(200, {}, "User logged out successfully"));
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User logged out successfully"));
 });
 
 /**
@@ -170,56 +180,57 @@ export const logoutUser = asyncHandler(async (req, res) => {
  * @access  Public
  */
 export const refreshAccessToken = asyncHandler(async (req, res) => {
-    const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
+  const incomingRefreshToken =
+    req.cookies.refreshToken || req.body.refreshToken;
 
-    if (!incomingRefreshToken) {
-        throw new ApiError(401, "Refresh token is required");
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "Refresh token is required");
+  }
+
+  try {
+    const decodedToken = jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+
+    const user = await User.findById(decodedToken._id).select("+refreshToken");
+
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token");
     }
 
-    try {
-        const decodedToken = jwt.verify(
-            incomingRefreshToken,
-            process.env.REFRESH_TOKEN_SECRET
-        );
-
-        const user = await User.findById(decodedToken._id).select("+refreshToken");
-
-        if (!user) {
-            throw new ApiError(401, "Invalid refresh token");
-        }
-
-        if (!user.isActive) {
-            throw new ApiError(403, "Account is deactivated");
-        }
-
-        if (incomingRefreshToken !== user.refreshToken) {
-            throw new ApiError(401, "Refresh token is expired or has been used");
-        }
-
-        const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(user);
-
-        const options = {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        };
-
-        return res
-            .status(200)
-            .cookie("accessToken", accessToken, options)
-            .cookie("refreshToken", newRefreshToken, options)
-            .json(
-                new ApiResponse(
-                    200,
-                    { accessToken, refreshToken: newRefreshToken },
-                    "Access token refreshed successfully"
-                )
-            );
-    } catch (error) {
-        throw new ApiError(401, error?.message || "Invalid refresh token");
+    if (!user.isActive) {
+      throw new ApiError(403, "Account is deactivated");
     }
+
+    if (incomingRefreshToken !== user.refreshToken) {
+      throw new ApiError(401, "Refresh token is expired or has been used");
+    }
+
+    const { accessToken, refreshToken: newRefreshToken } =
+      await generateAccessAndRefreshTokens(user);
+
+    const options = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    };
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, options)
+      .cookie("refreshToken", newRefreshToken, options)
+      .json(
+        new ApiResponse(
+          200,
+          { accessToken, refreshToken: newRefreshToken },
+          "Access token refreshed successfully"
+        )
+      );
+  } catch (error) {
+    throw new ApiError(401, error?.message || "Invalid refresh token");
+  }
 });
-
 
 /**
  * @desc    Get current user profile
@@ -227,9 +238,9 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const getCurrentUser = asyncHandler(async (req, res) => {
-    return res
-        .status(200)
-        .json(new ApiResponse(200, req.user, "Current user fetched successfully"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, req.user, "Current user fetched successfully"));
 });
 
 /**
@@ -238,10 +249,23 @@ export const getCurrentUser = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const updateAccountDetails = asyncHandler(async (req, res) => {
-    const { username, institution, phone, bio, preferences } = req.body;
+    const { username, fullName, email, institution, phone, bio, preferences } = req.body;
 
     const updateData = {};
     if (username) updateData.username = username;
+    if (fullName) updateData.fullName = fullName.trim();  // ← ADDED
+    if (email) {
+        // Check if email is already taken
+        const existingUser = await User.findOne({
+            email: email.toLowerCase().trim(),
+            _id: { $ne: req.user._id },
+        });
+
+        if (existingUser) {
+            throw new ApiError(409, 'Email is already in use');
+        }
+        updateData.email = email.toLowerCase().trim();  // ← UPDATED
+    }
     if (institution) updateData.institution = institution;
     if (phone) updateData.phone = phone;
     if (bio) updateData.bio = bio;
@@ -268,36 +292,35 @@ export const updateAccountDetails = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const changeCurrentPassword = asyncHandler(async (req, res) => {
-    const { oldPassword, newPassword } = req.body;
+  const { oldPassword, newPassword } = req.body;
 
-    if (!oldPassword || !newPassword) {
-        throw new ApiError(400, "Both old and new passwords are required");
-    }
+  if (!oldPassword || !newPassword) {
+    throw new ApiError(400, "Both old and new passwords are required");
+  }
 
-    if (newPassword.length < 6) {
-        throw new ApiError(400, "New password must be at least 6 characters");
-    }
+  if (newPassword.length < 6) {
+    throw new ApiError(400, "New password must be at least 6 characters");
+  }
 
-    const user = await User.findById(req.user._id).select("+password");
+  const user = await User.findById(req.user._id).select("+password");
 
-    if (!user) {
-        throw new ApiError(404, "User not found");
-    }
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
 
-    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+  const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
 
-    if (!isPasswordCorrect) {
-        throw new ApiError(400, "Current password is incorrect");
-    }
+  if (!isPasswordCorrect) {
+    throw new ApiError(400, "Current password is incorrect");
+  }
 
-    user.password = newPassword;
-    await user.save();
+  user.password = newPassword;
+  await user.save();
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, {}, "Password changed successfully"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password changed successfully"));
 });
-
 
 /**
  * @desc    Get all users (with pagination, filtering, search)
@@ -305,55 +328,55 @@ export const changeCurrentPassword = asyncHandler(async (req, res) => {
  * @access  Private/Admin
  */
 export const getUsers = asyncHandler(async (req, res) => {
-    const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 25;
-    const startIndex = (page - 1) * limit;
+  const page = parseInt(req.query.page, 10) || 1;
+  const limit = parseInt(req.query.limit, 10) || 25;
+  const startIndex = (page - 1) * limit;
 
-    const query = {};
+  const query = {};
 
-    if (req.query.role) {
-        query.role = req.query.role;
-    }
+  if (req.query.role) {
+    query.role = req.query.role;
+  }
 
-    if (req.query.isActive !== undefined) {
-        query.isActive = req.query.isActive === 'true';
-    }
+  if (req.query.isActive !== undefined) {
+    query.isActive = req.query.isActive === "true";
+  }
 
-    if (req.query.isEmailVerified !== undefined) {
-        query.isEmailVerified = req.query.isEmailVerified === 'true';
-    }
+  if (req.query.isEmailVerified !== undefined) {
+    query.isEmailVerified = req.query.isEmailVerified === "true";
+  }
 
-    if (req.query.search) {
-        query.$or = [
-            { username: { $regex: req.query.search, $options: 'i' } },
-            { email: { $regex: req.query.search, $options: 'i' } },
-            { institution: { $regex: req.query.search, $options: 'i' } }
-        ];
-    }
+  if (req.query.search) {
+    query.$or = [
+      { username: { $regex: req.query.search, $options: "i" } },
+      { email: { $regex: req.query.search, $options: "i" } },
+      { institution: { $regex: req.query.search, $options: "i" } },
+    ];
+  }
 
-    const users = await User.find(query)
-        .select("-password -refreshToken")
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .skip(startIndex);
+  const users = await User.find(query)
+    .select("-password -refreshToken")
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .skip(startIndex);
 
-    const total = await User.countDocuments(query);
+  const total = await User.countDocuments(query);
 
-    return res.status(200).json(
-        new ApiResponse(
-            200,
-            {
-                users,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    pages: Math.ceil(total / limit)
-                }
-            },
-            "Users fetched successfully"
-        )
-    );
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        users,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      },
+      "Users fetched successfully"
+    )
+  );
 });
 
 /**
@@ -362,24 +385,26 @@ export const getUsers = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const getUser = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.params.id).select("-password -refreshToken");
+  const user = await User.findById(req.params.id).select(
+    "-password -refreshToken"
+  );
 
-    if (!user) {
-        throw new ApiError(404, "User not found");
-    }
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
 
-    // Users can only view their own profile unless they're admin/teacher
-    if (
-        req.user.role !== 'admin' &&
-        req.user.role !== 'teacher' &&
-        req.user._id.toString() !== req.params.id
-    ) {
-        throw new ApiError(403, "Not authorized to view this profile");
-    }
+  // Users can only view their own profile unless they're admin/teacher
+  if (
+    req.user.role !== "admin" &&
+    req.user.role !== "teacher" &&
+    req.user._id.toString() !== req.params.id
+  ) {
+    throw new ApiError(403, "Not authorized to view this profile");
+  }
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, user, "User fetched successfully"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "User fetched successfully"));
 });
 
 /**
@@ -388,26 +413,27 @@ export const getUser = asyncHandler(async (req, res) => {
  * @access  Private/Admin
  */
 export const updateUser = asyncHandler(async (req, res) => {
-    const { role, isActive, isEmailVerified } = req.body;
+  const { role, isActive, isEmailVerified } = req.body;
 
-    const updateData = {};
-    if (role !== undefined) updateData.role = role;
-    if (isActive !== undefined) updateData.isActive = isActive;
-    if (isEmailVerified !== undefined) updateData.isEmailVerified = isEmailVerified;
+  const updateData = {};
+  if (role !== undefined) updateData.role = role;
+  if (isActive !== undefined) updateData.isActive = isActive;
+  if (isEmailVerified !== undefined)
+    updateData.isEmailVerified = isEmailVerified;
 
-    const user = await User.findByIdAndUpdate(
-        req.params.id,
-        { $set: updateData },
-        { new: true, runValidators: true }
-    ).select("-password -refreshToken");
+  const user = await User.findByIdAndUpdate(
+    req.params.id,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  ).select("-password -refreshToken");
 
-    if (!user) {
-        throw new ApiError(404, "User not found");
-    }
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, user, "User updated successfully"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "User updated successfully"));
 });
 
 /**
@@ -416,22 +442,22 @@ export const updateUser = asyncHandler(async (req, res) => {
  * @access  Private/Admin
  */
 export const deleteUser = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.params.id);
+  const user = await User.findById(req.params.id);
 
-    if (!user) {
-        throw new ApiError(404, "User not found");
-    }
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
 
-    // Prevent deleting admin accounts
-    if (user.role === 'admin') {
-        throw new ApiError(403, "Cannot delete admin accounts");
-    }
+  // Prevent deleting admin accounts
+  if (user.role === "admin") {
+    throw new ApiError(403, "Cannot delete admin accounts");
+  }
 
-    await user.deleteOne();
+  await user.deleteOne();
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, {}, "User deleted successfully"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "User deleted successfully"));
 });
 
 /**
@@ -440,29 +466,109 @@ export const deleteUser = asyncHandler(async (req, res) => {
  * @access  Private/Admin
  */
 export const getUserStats = asyncHandler(async (req, res) => {
-    const stats = await User.aggregate([
-        {
-            $group: {
-                _id: '$role',
-                count: { $sum: 1 }
-            }
-        }
-    ]);
+  const stats = await User.aggregate([
+    {
+      $group: {
+        _id: "$role",
+        count: { $sum: 1 },
+      },
+    },
+  ]);
 
-    const totalUsers = await User.countDocuments();
-    const activeUsers = await User.countDocuments({ isActive: true });
-    const verifiedUsers = await User.countDocuments({ isEmailVerified: true });
+  const totalUsers = await User.countDocuments();
+  const activeUsers = await User.countDocuments({ isActive: true });
+  const verifiedUsers = await User.countDocuments({ isEmailVerified: true });
 
-    return res.status(200).json(
-        new ApiResponse(
-            200,
-            {
-                total: totalUsers,
-                active: activeUsers,
-                verified: verifiedUsers,
-                byRole: stats
-            },
-            "User statistics fetched successfully"
-        )
-    );
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        total: totalUsers,
+        active: activeUsers,
+        verified: verifiedUsers,
+        byRole: stats,
+      },
+      "User statistics fetched successfully"
+    )
+  );
+});
+
+/**
+ * @desc    Update profile (fullName, email)
+ * @route   PATCH /api/v1/users/profile
+ * @access  Private
+ */
+export const updateProfile = asyncHandler(async (req, res) => {
+  const { fullName, email } = req.body;
+
+  if (!fullName && !email) {
+    throw new ApiError(400, "At least one field is required to update");
+  }
+
+  const updateData = {};
+  if (fullName) updateData.fullName = fullName.trim();
+  if (email) updateData.email = email.toLowerCase().trim();
+
+  // Check if email is already taken by another user
+  if (email) {
+    const existingUser = await User.findOne({
+      email: email.toLowerCase().trim(),
+      _id: { $ne: req.user._id }, // Exclude current user
+    });
+
+    if (existingUser) {
+      throw new ApiError(409, "Email is already in use");
+    }
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  ).select("-password -refreshToken");
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Profile updated successfully"));
+});
+
+/**
+ * @desc    Change password
+ * @route   POST /api/v1/users/password
+ * @access  Private
+ */
+export const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    throw new ApiError(400, "Both current and new passwords are required");
+  }
+
+  if (newPassword.length < 6) {
+    throw new ApiError(400, "New password must be at least 6 characters");
+  }
+
+  const user = await User.findById(req.user._id).select("+password");
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  // Use the existing isPasswordCorrect method
+  const isPasswordCorrect = await user.isPasswordCorrect(currentPassword);
+
+  if (!isPasswordCorrect) {
+    throw new ApiError(400, "Current password is incorrect");
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password changed successfully"));
 });

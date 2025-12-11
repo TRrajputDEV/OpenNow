@@ -20,11 +20,14 @@ import {
 import { QuestionService, ExamService } from "@/services";
 import { useToast } from "@/hooks/use-toast";
 
-const CreateExam = () => {
+
+const CreateExam = ({ examId = null }) => {  // ← Accept examId prop
   const navigate = useNavigate();
   const { toast } = useToast();
+  const isEditMode = !!examId;  // ← Detect edit mode
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [loadingExam, setLoadingExam] = useState(isEditMode);  // ← Loading state for fetching exam
   const [questions, setQuestions] = useState([]);
   const [filteredQuestions, setFilteredQuestions] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -43,6 +46,13 @@ const CreateExam = () => {
     selectedQuestions: [],
   });
 
+  // ← Fetch exam data if editing
+  useEffect(() => {
+    if (isEditMode) {
+      fetchExamData();
+    }
+  }, [examId]);
+
   useEffect(() => {
     fetchQuestions();
   }, []);
@@ -59,6 +69,62 @@ const CreateExam = () => {
     }, 0);
     setFormData((prev) => ({ ...prev, totalMarks: total }));
   }, [formData.selectedQuestions, questions]);
+
+  // ← NEW: Fetch exam data for edit mode
+  const fetchExamData = async () => {
+    try {
+      setLoadingExam(true);
+      const response = await ExamService.getExamById(examId);
+      const exam = response.data?.exam || response.data;
+
+      if (!exam) {
+        throw new Error('Exam not found');
+      }
+
+      // Extract date and time from startTime if exists
+      let scheduledDate = '';
+      let scheduledTime = '';
+      if (exam.startTime) {
+        const startDate = new Date(exam.startTime);
+        scheduledDate = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
+        scheduledTime = startDate.toTimeString().slice(0, 5); // HH:MM
+      }
+
+      // Extract question IDs from exam.questions array
+      const selectedQuestions = exam.questions?.map(q => 
+        q.question?._id || q.question || q._id
+      ) || [];
+
+      // Populate form with existing data
+      setFormData({
+        title: exam.title || '',
+        description: exam.description || '',
+        subject: exam.subject || '',
+        duration: exam.duration || 60,
+        totalMarks: exam.totalMarks || 0,
+        passingMarks: exam.passingMarks || 0,
+        instructions: exam.instructions || '',
+        scheduledDate,
+        scheduledTime,
+        selectedQuestions,
+      });
+
+      toast({
+        title: 'Exam loaded',
+        description: 'You can now edit the exam details',
+      });
+    } catch (error) {
+      console.error('Error fetching exam:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to load exam data',
+      });
+      navigate('/teacher/exams');
+    } finally {
+      setLoadingExam(false);
+    }
+  };
 
   const fetchQuestions = async () => {
     try {
@@ -207,7 +273,7 @@ const CreateExam = () => {
         (qId, index) => {
           const question = questions.find((q) => q._id === qId);
           return {
-            question: qId, // or questionId - backend accepts both
+            question: qId,
             marks: question?.marks || 1,
             order: index + 1,
           };
@@ -241,19 +307,28 @@ const CreateExam = () => {
 
       console.log("Sending exam data:", examData); // DEBUG
 
-      await ExamService.createExam(examData);
+      // ← UPDATED: Call update or create based on mode
+      if (isEditMode) {
+        await ExamService.updateExam(examId, examData);
+        toast({
+          title: "Success",
+          description: "Exam updated successfully",
+        });
+      } else {
+        await ExamService.createExam(examData);
+        toast({
+          title: "Success",
+          description: "Exam created successfully as draft",
+        });
+      }
 
-      toast({
-        title: "Success",
-        description: "Exam created successfully as draft",
-      });
       navigate("/teacher/exams");
     } catch (error) {
-      console.error("Error creating exam:", error); // DEBUG
+      console.error("Error saving exam:", error); // DEBUG
       toast({
         variant: "destructive",
         title: "Error",
-        description: error.message || "Failed to create exam",
+        description: error.message || `Failed to ${isEditMode ? 'update' : 'create'} exam`,
       });
     } finally {
       setLoading(false);
@@ -261,6 +336,18 @@ const CreateExam = () => {
   };
 
   const subjects = [...new Set(questions.map((q) => q.subject))];
+
+  // ← Show loading state while fetching exam
+  if (loadingExam) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-foreground mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading exam data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-6xl">
@@ -275,9 +362,12 @@ const CreateExam = () => {
           Back
         </Button>
         <div>
-          <h1 className="text-3xl font-bold">Create Exam</h1>
+          {/* ← UPDATED: Dynamic title */}
+          <h1 className="text-3xl font-bold">
+            {isEditMode ? 'Edit Exam' : 'Create Exam'}
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Build your exam from question bank
+            {isEditMode ? 'Update exam details' : 'Build your exam from question bank'}
           </p>
         </div>
       </div>
@@ -618,7 +708,11 @@ const CreateExam = () => {
                   disabled={loading}
                   className="flex-1"
                 >
-                  {loading ? "Creating..." : "Create Exam (Draft)"}
+                  {/* ← UPDATED: Dynamic button text */}
+                  {loading 
+                    ? (isEditMode ? 'Updating...' : 'Creating...') 
+                    : (isEditMode ? 'Update Exam' : 'Create Exam (Draft)')
+                  }
                 </Button>
               </div>
             </Card>
