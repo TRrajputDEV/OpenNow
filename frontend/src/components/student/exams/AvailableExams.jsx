@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   AlertCircle,
   PlayCircle,
+  Eye,
+  RefreshCw,
 } from 'lucide-react';
 import { ExamService } from '@/services';
 import { useToast } from '@/hooks/use-toast';
@@ -20,29 +22,55 @@ import { useToast } from '@/hooks/use-toast';
 const AvailableExams = () => {
   const [exams, setExams] = useState([]);
   const [filteredExams, setFilteredExams] = useState([]);
+  const [attempts, setAttempts] = useState([]); // ← NEW: Store student attempts
+  const [attemptMap, setAttemptMap] = useState({}); // ← NEW: Map examId -> attempt
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchExams();
+    fetchExamsAndAttempts(); // ← UPDATED: Fetch both exams and attempts
   }, []);
 
   useEffect(() => {
     filterExams();
   }, [exams, searchQuery, filterStatus]);
 
-  const fetchExams = async () => {
+  // ← UPDATED: Fetch both exams and attempts
+  const fetchExamsAndAttempts = async () => {
     try {
       setLoading(true);
-      const response = await ExamService.getAllExams();
-      const examsData = response.data?.exams || response.data || [];
       
+      // Fetch exams and attempts in parallel
+      const [examsResponse, attemptsResponse] = await Promise.all([
+        ExamService.getAllExams(),
+        ExamService.getMyAttempts().catch(() => ({ data: [] })), // Don't fail if attempts fail
+      ]);
+
+      const examsData = examsResponse.data?.exams || examsResponse.data || [];
+      const attemptsData = Array.isArray(attemptsResponse.data)
+        ? attemptsResponse.data
+        : attemptsResponse.data?.attempts || [];
+
       // Filter only published exams for students
       const publishedExams = examsData.filter((exam) => exam.isPublished);
       setExams(Array.isArray(publishedExams) ? publishedExams : []);
+      setAttempts(attemptsData);
+
+      // ← NEW: Build attemptMap for quick lookup
+      const map = {};
+      attemptsData.forEach((attempt) => {
+        const examId = attempt.exam?._id || attempt.exam;
+        if (examId) {
+          map[examId] = attempt;
+        }
+      });
+      setAttemptMap(map);
+
+      console.log('✅ AvailableExams: Loaded', publishedExams.length, 'exams and', attemptsData.length, 'attempts');
     } catch (error) {
+      console.error('❌ AvailableExams: Error fetching data:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -114,6 +142,65 @@ const AvailableExams = () => {
     const startTime = new Date(exam.startTime);
     const endTime = new Date(exam.endTime);
     return now >= startTime && now <= endTime;
+  };
+
+  // ← NEW: Get button for exam based on attempt status
+  const getExamButton = (exam) => {
+    const attempt = attemptMap[exam._id];
+    const canStart = canStartExam(exam);
+    const now = new Date();
+    const startTime = new Date(exam.startTime);
+
+    // If student has attempted this exam
+    if (attempt) {
+      if (attempt.status === 'completed') {
+        // Show "View Result" for completed attempts
+        return (
+          <Button asChild className="w-full" variant="default">
+            <Link to={`/student/results/${attempt._id}`}>
+              <Eye className="mr-2 h-4 w-4" />
+              View Result
+            </Link>
+          </Button>
+        );
+      } else if (attempt.status === 'in-progress') {
+        // Show "Resume Exam" for in-progress attempts
+        return (
+          <Button asChild className="w-full" variant="default">
+            <Link to={`/student/exams/${exam._id}/start`}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Resume Exam
+            </Link>
+          </Button>
+        );
+      }
+    }
+
+    // No attempt exists - show based on exam timing
+    if (canStart) {
+      return (
+        <Button asChild className="w-full">
+          <Link to={`/student/exams/${exam._id}/start`}>
+            <PlayCircle className="mr-2 h-4 w-4" />
+            Start Exam
+          </Link>
+        </Button>
+      );
+    } else if (startTime > now) {
+      return (
+        <Button disabled className="w-full">
+          <Calendar className="mr-2 h-4 w-4" />
+          Starts {formatDate(startTime)}
+        </Button>
+      );
+    } else {
+      return (
+        <Button disabled className="w-full">
+          <AlertCircle className="mr-2 h-4 w-4" />
+          Exam Ended
+        </Button>
+      );
+    }
   };
 
   const formatDate = (date) => {
@@ -215,8 +302,8 @@ const AvailableExams = () => {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredExams.map((exam, index) => {
             const status = getExamStatus(exam);
-            const canStart = canStartExam(exam);
             const StatusIcon = status.icon;
+            const attempt = attemptMap[exam._id]; // ← NEW: Get attempt for this exam
 
             return (
               <motion.div
@@ -271,28 +358,28 @@ const AvailableExams = () => {
                         {formatDate(exam.startTime)}
                       </span>
                     </div>
+
+                    {/* ← NEW: Show attempt status if exists */}
+                    {attempt && (
+                      <div className="flex items-center gap-2 text-sm">
+                        {attempt.status === 'completed' ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4 text-orange-600" />
+                        )}
+                        <span className="font-medium">
+                          {attempt.status === 'completed' 
+                            ? `Scored: ${attempt.score}/${attempt.totalMarks}`
+                            : 'In Progress'
+                          }
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
                   <div className="pt-4 border-t">
-                    {canStart ? (
-                      <Button asChild className="w-full">
-                        <Link to={`/student/exams/${exam._id}/start`}>
-                          <PlayCircle className="mr-2 h-4 w-4" />
-                          Start Exam
-                        </Link>
-                      </Button>
-                    ) : new Date(exam.startTime) > new Date() ? (
-                      <Button disabled className="w-full">
-                        <Calendar className="mr-2 h-4 w-4" />
-                        Starts {formatDate(exam.startTime)}
-                      </Button>
-                    ) : (
-                      <Button disabled className="w-full">
-                        <AlertCircle className="mr-2 h-4 w-4" />
-                        Exam Ended
-                      </Button>
-                    )}
+                    {getExamButton(exam)} {/* ← UPDATED: Use new button logic */}
                   </div>
                 </Card>
               </motion.div>

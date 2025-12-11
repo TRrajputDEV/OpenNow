@@ -12,13 +12,16 @@ import RegisterPage from "@/components/auth/RegisterPage";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import TeacherLayout from "@/components/teacher/TeacherLayout";
 import TeacherDashboard from "@/components/teacher/TeacherDashboard";
-import { CreateExam, ExamDetails } from "@/components/teacher/exams";
+import { CreateExam, ExamDetails, EditExam } from "@/components/teacher/exams";
 
+import { TeacherProfile } from "@/components/teacher/profile";
 // stufent imports:
 import StudentLayout from "@/components/student/StudentLayout";
 import StudentDashboard from "@/components/student/StudentDashboard";
 import { AvailableExams, TakeExam } from "@/components/student/exams";
-import { Results, ResultDetail } from '@/components/student/results';
+import { Results, ResultDetail } from "@/components/student/results";
+import { StudentPerformance } from "@/components/student/analytics";
+import { StudentProfile } from "@/components/student/profile";
 
 import {
   QuestionsList,
@@ -65,6 +68,8 @@ function App() {
             <Route path="exams/:id/start" element={<TakeExam />} />
             <Route path="results" element={<Results />} />
             <Route path="results/:id" element={<ResultDetail />} />
+            <Route path="performance" element={<StudentPerformance />} />
+            <Route path="profile" element={<StudentProfile />} />
             {/* More routes coming: results, history, profile */}
           </Route>
 
@@ -87,6 +92,9 @@ function App() {
             <Route path="exams" element={<ExamsList />} />
             <Route path="exams/create" element={<CreateExam />} />
             <Route path="exams/:id" element={<ExamDetails />} />
+
+            <Route path="exams/edit/:id" element={<EditExam />} />
+            <Route path="profile" element={<TeacherProfile />} />
             {/* We'll add more routes here */}
           </Route>
 

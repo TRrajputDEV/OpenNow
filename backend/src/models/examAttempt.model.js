@@ -57,7 +57,7 @@ const ExamAttemptSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['in-progress', 'submitted', 'auto-submitted'],
+        enum: ['in-progress', 'submitted', 'auto-submitted', 'completed'],
         default: 'in-progress'
     },
     score: {
