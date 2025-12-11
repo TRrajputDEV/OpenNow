@@ -25,60 +25,64 @@ const generateAccessAndRefreshTokens = async (user) => {
  * @access  Public
  */
 export const registerUser = asyncHandler(async (req, res) => {
-  const {
-    username,
-    email,
-    password,
-    role,
-    institution,
-    phone,
-    rollNumber,
-    class: userClass,
-    section,
-  } = req.body;
+    const { 
+        username, 
+        email, 
+        password, 
+        fullName,  // ← Make sure this is here
+        role, 
+        institution, 
+        phone, 
+        rollNumber, 
+        class: userClass, 
+        section 
+    } = req.body;
 
-  if (!username || !email || !password) {
-    throw new ApiError(400, "Username, email, and password are required");
-  }
+    // ← UPDATE validation
+    if (!username || !email || !password || !fullName) {
+        throw new ApiError(400, "Username, email, password, and full name are required");
+    }
 
-  if ([username, email, password].some((field) => field.trim() === "")) {
-    throw new ApiError(400, "Fields cannot be empty");
-  }
+    if ([username, email, password, fullName].some((field) => field.trim() === "")) {
+        throw new ApiError(400, "Fields cannot be empty");
+    }
 
-  const existingUser = await User.findOne({
-    $or: [{ username }, { email }],
-  });
+    const existingUser = await User.findOne({
+        $or: [{ username }, { email }]
+    });
 
-  if (existingUser) {
-    throw new ApiError(409, "User with this email or username already exists");
-  }
+    if (existingUser) {
+        throw new ApiError(409, "User with this email or username already exists");
+    }
 
-  const userData = {
-    username: username.toLowerCase(),
-    email: email.toLowerCase(),
-    password,
-    role: role || "student",
-  };
-  if (institution) userData.institution = institution;
-  if (phone) userData.phone = phone;
-  if (rollNumber) userData.rollNumber = rollNumber;
-  if (userClass) userData.class = userClass;
-  if (section) userData.section = section;
+    const userData = {
+        username: username.toLowerCase(),
+        email: email.toLowerCase(),
+        password,
+        fullName: fullName.trim(),  // ← ADD THIS
+        role: role || 'student',
+    };
+    
+    // Optional fields
+    if (institution) userData.institution = institution;
+    if (phone) userData.phone = phone;
+    if (rollNumber) userData.rollNumber = rollNumber;
+    if (userClass) userData.class = userClass;
+    if (section) userData.section = section;
 
-  const user = await User.create(userData);
+    const user = await User.create(userData);
 
-  const createdUser = await User.findById(user._id).select(
-    "-password -refreshToken"
-  );
+    const createdUser = await User.findById(user._id).select("-password -refreshToken");
 
-  if (!createdUser) {
-    throw new ApiError(500, "User registration failed");
-  }
+    if (!createdUser) {
+        throw new ApiError(500, "User registration failed");
+    }
 
-  return res
-    .status(201)
-    .json(new ApiResponse(201, createdUser, "User registered successfully"));
+    return res.status(201).json(
+        new ApiResponse(201, createdUser, "User registered successfully")
+    );
 });
+
 
 /**
  * @desc    Login user
@@ -249,41 +253,42 @@ export const getCurrentUser = asyncHandler(async (req, res) => {
  * @access  Private
  */
 export const updateAccountDetails = asyncHandler(async (req, res) => {
-    const { username, fullName, email, institution, phone, bio, preferences } = req.body;
+  const { username, fullName, email, institution, phone, bio, preferences } =
+    req.body;
 
-    const updateData = {};
-    if (username) updateData.username = username;
-    if (fullName) updateData.fullName = fullName.trim();  // ← ADDED
-    if (email) {
-        // Check if email is already taken
-        const existingUser = await User.findOne({
-            email: email.toLowerCase().trim(),
-            _id: { $ne: req.user._id },
-        });
+  const updateData = {};
+  if (username) updateData.username = username;
+  if (fullName) updateData.fullName = fullName.trim(); // ← ADDED
+  if (email) {
+    // Check if email is already taken
+    const existingUser = await User.findOne({
+      email: email.toLowerCase().trim(),
+      _id: { $ne: req.user._id },
+    });
 
-        if (existingUser) {
-            throw new ApiError(409, 'Email is already in use');
-        }
-        updateData.email = email.toLowerCase().trim();  // ← UPDATED
+    if (existingUser) {
+      throw new ApiError(409, "Email is already in use");
     }
-    if (institution) updateData.institution = institution;
-    if (phone) updateData.phone = phone;
-    if (bio) updateData.bio = bio;
-    if (preferences) updateData.preferences = preferences;
+    updateData.email = email.toLowerCase().trim(); // ← UPDATED
+  }
+  if (institution) updateData.institution = institution;
+  if (phone) updateData.phone = phone;
+  if (bio) updateData.bio = bio;
+  if (preferences) updateData.preferences = preferences;
 
-    if (Object.keys(updateData).length === 0) {
-        throw new ApiError(400, "At least one field is required to update");
-    }
+  if (Object.keys(updateData).length === 0) {
+    throw new ApiError(400, "At least one field is required to update");
+  }
 
-    const user = await User.findByIdAndUpdate(
-        req.user._id,
-        { $set: updateData },
-        { new: true, runValidators: true }
-    ).select("-password -refreshToken");
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  ).select("-password -refreshToken");
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, user, "Account details updated successfully"));
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Account details updated successfully"));
 });
 
 /**

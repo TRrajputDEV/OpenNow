@@ -13,6 +13,14 @@ const UserSchema = new mongoose.Schema({
         maxlength: [50, 'Username cannot be longer than 50 characters'],
         index: true
     },
+    // ← ADD THIS FIELD
+    fullName: {
+        type: String,
+        required: [true, 'Please provide your full name'],
+        trim: true,
+        minlength: [2, 'Full name must be at least 2 characters'],
+        maxlength: [100, 'Full name cannot be longer than 100 characters']
+    },
     email: {
         type: String,
         required: [true, 'Please provide an email'],
@@ -28,7 +36,7 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please provide a password'],
         minlength: [6, 'Password must be at least 6 characters'],
-        select: false  
+        select: false
     },
     refreshToken: {
         type: String,
@@ -86,7 +94,7 @@ const UserSchema = new mongoose.Schema({
             default: 'UTC'
         }
     },
-    
+    // Teacher-specific fields
     subjects: [{
         type: String,
         trim: true
@@ -96,6 +104,7 @@ const UserSchema = new mongoose.Schema({
         students: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
         createdAt: { type: Date, default: Date.now }
     }],
+    // Student-specific fields
     rollNumber: {
         type: String,
         trim: true,
@@ -115,12 +124,17 @@ const UserSchema = new mongoose.Schema({
     toObject: { virtuals: true }
 });
 
+// Compound index for common queries
 UserSchema.index({ role: 1, isActive: 1 });
-UserSchema.index({ email: 1 });  
-UserSchema.virtual('fullname').get(function() {
-    return this.username;
-});
+UserSchema.index({ email: 1 });
 
+// ← REMOVE OR UPDATE THE VIRTUAL (it's now redundant)
+// Virtual for fullname - you can remove this now since we have an actual field
+// UserSchema.virtual('fullname').get(function() {
+//     return this.fullName;  // Or just remove it entirely
+// });
+
+// Hash password before saving
 UserSchema.pre('save', async function(next) {
     if (!this.isModified('password')) return next();
     
@@ -129,6 +143,7 @@ UserSchema.pre('save', async function(next) {
     next();
 });
 
+// Compare password method
 UserSchema.methods.isPasswordCorrect = async function(password) {
     if (!this.password) {
         throw new Error('Password not selected. Use .select("+password")');
@@ -136,22 +151,24 @@ UserSchema.methods.isPasswordCorrect = async function(password) {
     return await bcrypt.compare(password, this.password);
 };
 
-
+// Generate Access Token with role for authorization
 UserSchema.methods.generateAccessToken = function() {
     return jwt.sign(
         {
             _id: this._id,
             email: this.email,
             username: this.username,
-            role: this.role  
+            fullName: this.fullName,  // ← ADD fullName to token
+            role: this.role
         },
         process.env.ACCESS_TOKEN_SECRET,
         {
-            expiresIn: process.env.ACCESS_TOKEN_EXPIRY || '15m' 
+            expiresIn: process.env.ACCESS_TOKEN_EXPIRY || '15m'
         }
     );
 };
 
+// Generate Refresh Token
 UserSchema.methods.generateRefreshToken = function() {
     return jwt.sign(
         {
@@ -159,11 +176,12 @@ UserSchema.methods.generateRefreshToken = function() {
         },
         process.env.REFRESH_TOKEN_SECRET,
         {
-            expiresIn: process.env.REFRESH_TOKEN_EXPIRY || '7d' 
+            expiresIn: process.env.REFRESH_TOKEN_EXPIRY || '7d'
         }
     );
 };
 
+// Update last login
 UserSchema.methods.updateLastLogin = function() {
     this.lastLogin = new Date();
     return this.save({ validateBeforeSave: false });
