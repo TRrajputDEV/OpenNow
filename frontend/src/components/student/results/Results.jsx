@@ -26,22 +26,18 @@ const Results = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    console.log('🎯 Results: Component mounted, fetching attempts...');
     fetchAttempts();
   }, []);
 
   useEffect(() => {
-    console.log('🔍 Results: Filtering attempts. Query:', searchQuery, 'Status:', filterStatus);
     filterAttempts();
   }, [attempts, searchQuery, filterStatus]);
 
   const fetchAttempts = async () => {
     try {
       setLoading(true);
-      console.log('📡 Results: Fetching my attempts...');
       
       const response = await ExamService.getMyAttempts();
-      console.log('✅ Results: Attempts received:', response.data);
       
       let attemptsData = response.data;
 
@@ -51,11 +47,9 @@ const Results = () => {
       } else if (attemptsData?.attempts && Array.isArray(attemptsData.attempts)) {
         setAttempts(attemptsData.attempts);
       } else {
-        console.warn('⚠️ Results: Unexpected data structure:', attemptsData);
         setAttempts([]);
       }
     } catch (error) {
-      console.error('❌ Results: Error fetching attempts:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -83,7 +77,6 @@ const Results = () => {
       });
     }
 
-    console.log('✅ Results: Filtered', filtered.length, 'attempts');
     setFilteredAttempts(filtered);
   };
 
@@ -98,8 +91,6 @@ const Results = () => {
     const avgPercentage = (
       attempts.reduce((sum, a) => sum + (a?.percentage || 0), 0) / total
     ).toFixed(2);
-
-    console.log('📊 Results: Stats calculated -', { total, passed, failed, avgPercentage });
 
     return { total, passed, failed, avgPercentage };
   };

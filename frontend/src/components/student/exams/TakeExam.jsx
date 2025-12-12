@@ -26,12 +26,12 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const TakeExam = () => {
-  const { id: rawId } = useParams(); // examId from route
+  const { id: rawId } = useParams();
   const examId = (rawId || "").trim();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [examData, setExamData] = useState(null); // { examTitle, duration, totalMarks, questions }
+  const [examData, setExamData] = useState(null);
   const [attemptId, setAttemptId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -42,18 +42,15 @@ const TakeExam = () => {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    console.log("🎯 TakeExam: Initializing exam with ID:", examId);
     initExam();
   }, [examId]);
 
-  // Timer
   useEffect(() => {
     if (timeRemaining <= 0) return;
 
     const timer = setInterval(() => {
       setTimeRemaining((prev) => {
         if (prev <= 1) {
-          console.log("⏰ TakeExam: Time up! Auto-submitting...");
           handleAutoSubmit();
           return 0;
         }
@@ -64,7 +61,6 @@ const TakeExam = () => {
     return () => clearInterval(timer);
   }, [timeRemaining]);
 
-  // Warn before leaving page
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (examData && !submitting) {
@@ -80,30 +76,21 @@ const TakeExam = () => {
   const initExam = async () => {
     try {
       setLoading(true);
-      console.log("📡 TakeExam: Fetching exam + starting attempt...");
 
-      // 1) Fetch exam (with questions)
       const examResp = await ExamService.getExamById(examId);
-      console.log("✅ TakeExam: Raw examResp:", examResp);
 
       const exam =
-        examResp.data?.exam || examResp.data || examResp.exam || examResp; // handle different wrappers
-      console.log("✅ TakeExam: Parsed exam:", exam);
+        examResp.data?.exam || examResp.data || examResp.exam || examResp;
 
       if (!exam || !Array.isArray(exam.questions)) {
-        console.error("❌ TakeExam: Invalid exam object:", exam);
         throw new Error("Invalid exam data received");
       }
 
-      // 2) Start/resume attempt
       const attemptData = await ExamService.startExamAttempt(examId);
-      console.log("✅ TakeExam: Attempt started/resumed:", attemptData);
 
       setAttemptId(attemptData._id || attemptData.id);
 
-      // 3) Build examData for UI
       const normalizedQuestions = exam.questions.map((q) => {
-        // exam.questions likely has shape: { question, marks, order }
         const base = q.question || q;
         return {
           _id: base._id,
@@ -121,11 +108,9 @@ const TakeExam = () => {
         questions: normalizedQuestions,
       };
 
-      console.log("✅ TakeExam: UI examData:", uiExamData);
       setExamData(uiExamData);
       setTimeRemaining((exam.duration || 0) * 60);
 
-      // 4) Initialize answers map
       const initialAnswers = {};
       normalizedQuestions.forEach((q) => {
         initialAnswers[q._id] = null;
@@ -137,8 +122,6 @@ const TakeExam = () => {
         description: `You have ${exam.duration} minutes to complete this exam`,
       });
     } catch (error) {
-      console.error("❌ TakeExam: Error initializing exam:", error);
-      console.error("❌ TakeExam: Error response:", error.response?.data);
       toast({
         variant: "destructive",
         title: "Error",
@@ -154,13 +137,6 @@ const TakeExam = () => {
   };
 
   const handleAnswer = async (questionId, answer) => {
-    console.log(
-      "💾 TakeExam: Saving answer for question:",
-      questionId,
-      "Answer:",
-      answer
-    );
-
     setAnswers((prev) => ({
       ...prev,
       [questionId]: answer,
@@ -171,32 +147,25 @@ const TakeExam = () => {
         questionId,
         answer,
       });
-      console.log("✅ TakeExam: Answer saved to backend");
     } catch (error) {
-      console.error("⚠️ TakeExam: Failed to save answer to backend:", error);
-      // Silent fail; local state is still fine
     }
   };
 
   const toggleFlag = () => {
     const questionId = examData.questions[currentQuestionIndex]._id;
-    console.log("🚩 TakeExam: Toggling flag for question:", questionId);
 
     setFlaggedQuestions((prev) => {
       const s = new Set(prev);
       if (s.has(questionId)) {
         s.delete(questionId);
-        console.log("➖ TakeExam: Question unflagged");
       } else {
         s.add(questionId);
-        console.log("➕ TakeExam: Question flagged");
       }
       return s;
     });
   };
 
   const goToQuestion = (index) => {
-    console.log("📍 TakeExam: Navigating to question index:", index);
     setCurrentQuestionIndex(index);
   };
 
@@ -213,7 +182,6 @@ const TakeExam = () => {
   };
 
   const handleAutoSubmit = () => {
-    console.log("⏰ TakeExam: Auto-submitting exam due to timeout");
     toast({
       title: "Time Up!",
       description: "Your exam has been automatically submitted",
@@ -227,27 +195,19 @@ const TakeExam = () => {
     }
 
     setSubmitting(true);
-    console.log("📤 TakeExam: Submitting exam. Attempt ID:", attemptId);
-    console.log("📤 TakeExam: Current answers (local):", answers);
 
     try {
       const resp = await ExamService.submitExamAttempt(attemptId, {});
-      console.log("✅ TakeExam: Exam submitted successfully! Resp:", resp);
 
-      const result = resp.data?.data || resp.data || resp; // unwrap ApiResponse if needed
+      const result = resp.data?.data || resp.data || resp;
 
       toast({
         title: "Success",
         description: `Exam submitted! Your score: ${result.score}/${result.totalMarks}`,
       });
 
-      console.log(
-        "🎯 TakeExam: Navigating to results page. Attempt ID:",
-        attemptId
-      );
       navigate(`/student/results/${attemptId}`, { replace: true });
     } catch (error) {
-      console.error("❌ TakeExam: Error submitting exam:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -309,7 +269,6 @@ const TakeExam = () => {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      {/* Top Bar */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-background border-b">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
@@ -342,13 +301,10 @@ const TakeExam = () => {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="pt-24 px-4 max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-4 gap-6">
-          {/* Question Section */}
           <div className="lg:col-span-3">
             <Card className="p-6">
-              {/* Header */}
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-full bg-foreground text-background flex items-center justify-center font-semibold">
@@ -379,14 +335,12 @@ const TakeExam = () => {
                 </Button>
               </div>
 
-              {/* Question Text */}
               <div className="mb-6">
                 <p className="text-lg font-medium leading-relaxed">
                   {currentQuestion.questionText}
                 </p>
               </div>
 
-              {/* Options */}
               <div className="space-y-3">
                 {currentQuestion.type === "true-false" ? (
                   <>
@@ -492,7 +446,6 @@ const TakeExam = () => {
                 )}
               </div>
 
-              {/* Navigation */}
               <div className="flex items-center justify-between mt-8 pt-6 border-t">
                 <Button
                   variant="outline"
@@ -516,7 +469,6 @@ const TakeExam = () => {
             </Card>
           </div>
 
-          {/* Side Panel */}
           <div className="lg:col-span-1">
             <Card className="p-4 sticky top-24">
               <h3 className="font-semibold mb-4 flex items-center gap-2">
@@ -568,7 +520,6 @@ const TakeExam = () => {
         </div>
       </div>
 
-      {/* Submit Confirmation Dialog */}
       <AlertDialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
