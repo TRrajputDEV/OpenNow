@@ -24,25 +24,18 @@ const StudentDashboard = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    console.log('🎯 StudentDashboard: Loading dashboard data...');
     fetchDashboardData();
   }, []);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      console.log('📡 StudentDashboard: Fetching stats and attempts...');
-
       // Fetch stats and attempts in parallel
       const [statsResponse, attemptsResponse, examsResponse] = await Promise.all([
         ExamService.getAttemptStats().catch(() => ({ data: null })),
         ExamService.getMyAttempts().catch(() => ({ data: [] })),
         ExamService.getAllExams().catch(() => ({ data: [] })),
       ]);
-
-      console.log('✅ StudentDashboard: Stats:', statsResponse.data);
-      console.log('✅ StudentDashboard: Attempts:', attemptsResponse.data);
-      console.log('✅ StudentDashboard: Exams:', examsResponse.data);
 
       // Set stats
       setStats(statsResponse.data || {

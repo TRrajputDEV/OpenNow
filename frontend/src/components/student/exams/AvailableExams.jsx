@@ -68,7 +68,6 @@ const AvailableExams = () => {
       });
       setAttemptMap(map);
 
-      console.log('✅ AvailableExams: Loaded', publishedExams.length, 'exams and', attemptsData.length, 'attempts');
     } catch (error) {
       console.error('❌ AvailableExams: Error fetching data:', error);
       toast({

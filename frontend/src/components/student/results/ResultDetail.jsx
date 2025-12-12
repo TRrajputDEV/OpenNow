@@ -17,29 +17,22 @@ import { useToast } from "@/hooks/use-toast";
 import confetti from "canvas-confetti";
 
 const ResultDetail = () => {
-  const { id } = useParams(); // attemptId
+  const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log("🎯 ResultDetail: Loading result for attempt ID:", id);
     fetchAttempt();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchAttempt = async () => {
     try {
       setLoading(true);
-      console.log("📡 ResultDetail: Fetching attempt result...");
-
       const response = await ExamService.getAttemptById(id);
-      console.log("✅ ResultDetail: Attempt data received (raw):", response);
+      const attemptData = response.data || response;
 
-      const attemptData = response.data || response; // handle { data } wrapper
-
-      // Accept if we at least have core fields
       if (!attemptData || (!attemptData.exam && !attemptData.examTitle)) {
         throw new Error("Invalid attempt data received");
       }
@@ -47,7 +40,6 @@ const ResultDetail = () => {
       setAttempt(attemptData);
 
       if (attemptData.passed || attemptData.status === "passed") {
-        console.log("🎊 ResultDetail: Student passed! Launching confetti...");
         setTimeout(() => {
           confetti({
             particleCount: 100,
@@ -116,16 +108,8 @@ const ResultDetail = () => {
     ? attempt.answers.length
     : 0;
 
-  console.log(
-    "📊 ResultDetail: Rendering results. Passed:",
-    isPassed,
-    "Percentage:",
-    percentage
-  );
-
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Button
           variant="ghost"
@@ -137,7 +121,6 @@ const ResultDetail = () => {
         </Button>
       </div>
 
-      {/* Result Card */}
       <Card
         className={`p-8 text-center ${
           isPassed
@@ -192,7 +175,6 @@ const ResultDetail = () => {
         </div>
       </Card>
 
-      {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
@@ -252,7 +234,6 @@ const ResultDetail = () => {
         </Card>
       </div>
 
-      {/* Exam Info */}
       <Card className="p-6">
         <h2 className="text-xl font-semibold mb-4">Exam Details</h2>
         <div className="grid md:grid-cols-2 gap-4 text-sm">
@@ -292,7 +273,6 @@ const ResultDetail = () => {
         </div>
       </Card>
 
-      {/* Questions Review */}
       {Array.isArray(attempt.answers) && attempt.answers.length > 0 && (
         <Card className="p-6">
           <h2 className="text-xl font-semibold mb-4">
@@ -333,7 +313,6 @@ const ResultDetail = () => {
                       : "border-red-200 bg-red-500/5"
                   }`}
                 >
-                  {/* Question Header */}
                   <div className="flex items-start gap-3 mb-3">
                     <div
                       className={`h-8 w-8 rounded-full flex items-center justify-center font-semibold flex-shrink-0 ${
@@ -373,7 +352,6 @@ const ResultDetail = () => {
                     </div>
                   </div>
 
-                  {/* Answers */}
                   <div className="ml-11 space-y-2">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">
@@ -421,7 +399,6 @@ const ResultDetail = () => {
         </Card>
       )}
 
-      {/* Actions */}
       <Card className="p-6">
         <div className="flex flex-wrap gap-3 justify-center">
           <Button asChild variant="outline">
